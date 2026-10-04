@@ -124,6 +124,9 @@ t = TRANSLATIONS[st.session_state.lang]
 def get_db_engine():
     try:
         db_url = st.secrets["postgres"]["url"]
+        # تحويل صيغة الاتصال لتستخدم psycopg2 مباشرة
+        if db_url.startswith("postgresql://"):
+            db_url = db_url.replace("postgresql://", "postgresql+psycopg2://", 1)
         engine = create_engine(db_url, pool_pre_ping=True)
         return engine
     except Exception as e:
