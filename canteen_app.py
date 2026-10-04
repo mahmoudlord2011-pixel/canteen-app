@@ -28,7 +28,7 @@ TRANSLATIONS = {
         "dashboard_page": "📊 التقارير والإحصائيات",
         "settings_page": "⚙️ الإعدادات والأمان",
         "system_locked": "🔒 النظام مغلق حالياً بقرار من الإدارة.",
-        "kill_switch_active": "الرجاء التواصل مع المسين لقفل/فتح النظام.",
+        "kill_switch_active": "الرجاء التواصل مع الأدمن لفتح النظام.",
         "add_sale": "تسجيل عملية بيع جديدة",
         "select_product": "اختر المنتج",
         "quantity": "الكمية",
@@ -124,10 +124,16 @@ t = TRANSLATIONS[st.session_state.lang]
 def get_db_engine():
     try:
         db_url = st.secrets["postgres"]["url"]
-        # تحويل صيغة الاتصال لتستخدم psycopg2 مباشرة
         if db_url.startswith("postgresql://"):
             db_url = db_url.replace("postgresql://", "postgresql+psycopg2://", 1)
-        engine = create_engine(db_url, pool_pre_ping=True)
+        
+        # خيارات اتصال محسنة ومستقرة للربط مع Supabase
+        engine = create_engine(
+            db_url,
+            pool_pre_ping=True,
+            pool_recycle=300,
+            connect_args={"connect_timeout": 10}
+        )
         return engine
     except Exception as e:
         st.error(f"Database connection error: {e}")
@@ -135,7 +141,6 @@ def get_db_engine():
 
 engine = get_db_engine()
 
-# Initialize Tables
 def init_db():
     if engine is None:
         return
@@ -167,7 +172,6 @@ def init_db():
                 value TEXT NOT NULL
             );
         """))
-        # Default Kill Switch State
         conn.execute(text("""
             INSERT INTO system_config (key, value)
             VALUES ('is_locked', 'false')
@@ -176,13 +180,15 @@ def init_db():
 
 init_db()
 
-# Helpers
 def is_system_locked():
     if engine is None:
         return False
-    with engine.connect() as conn:
-        res = conn.execute(text("SELECT value FROM system_config WHERE key = 'is_locked'")).fetchone()
-        return res[0] == "true" if res else False
+    try:
+        with engine.connect() as conn:
+            res = conn.execute(text("SELECT value FROM system_config WHERE key = 'is_locked'")).fetchone()
+            return res[0] == "true" if res else False
+    except:
+        return False
 
 def set_system_lock(locked: bool):
     val = "true" if locked else "false"
@@ -207,7 +213,6 @@ with st.sidebar:
 # 6. Page Logic
 # ---------------------------------------------------------
 
-# --- SYSTEM LOCKED CHECK ---
 if locked and page != t["settings_page"]:
     st.error(t["system_locked"])
     st.info(t["kill_switch_active"])
@@ -217,8 +222,12 @@ if locked and page != t["settings_page"]:
 if page == t["sales_page"]:
     st.subheader(t["add_sale"])
     
-    with engine.connect() as conn:
-        products_df = pd.read_sql("SELECT * FROM products WHERE stock > 0 ORDER BY name ASC", conn)
+    try:
+        with engine.connect() as conn:
+            products_df = pd.read_sql("SELECT * FROM products WHERE stock > 0 ORDER BY name ASC", conn)
+    except Exception as e:
+        products_df = pd.DataFrame()
+        st.error(f"Error loading inventory: {e}")
     
     if products_df.empty:
         st.warning(t["out_of_stock"])
@@ -246,12 +255,10 @@ if page == t["sales_page"]:
                 st.error(t["insufficient_stock"])
             else:
                 with engine.begin() as conn:
-                    # Deduct stock
                     conn.execute(
                         text("UPDATE products SET stock = stock - :qty WHERE name = :name"),
                         {"qty": qty, "name": selected_prod_name}
                     )
-                    # Insert sale
                     conn.execute(
                         text("""
                             INSERT INTO sales (product_name, quantity, unit_price, total_price, profit, buyer_name)
@@ -306,16 +313,22 @@ elif page == t["products_page"]:
 
     st.divider()
     st.subheader(t["current_inventory"])
-    with engine.connect() as conn:
-        inv_df = pd.read_sql("SELECT name, cost_price, selling_price, stock FROM products ORDER BY name ASC", conn)
-    st.dataframe(inv_df, use_container_width=True)
+    try:
+        with engine.connect() as conn:
+            inv_df = pd.read_sql("SELECT name, cost_price, selling_price, stock FROM products ORDER BY name ASC", conn)
+        st.dataframe(inv_df, use_container_width=True)
+    except:
+        st.info("No products found yet.")
 
 # --- 3. ANALYTICS & DASHBOARD PAGE ---
 elif page == t["dashboard_page"]:
     st.subheader(t["dashboard_page"])
     
-    with engine.connect() as conn:
-        sales_df = pd.read_sql("SELECT * FROM sales ORDER BY timestamp DESC", conn)
+    try:
+        with engine.connect() as conn:
+            sales_df = pd.read_sql("SELECT * FROM sales ORDER BY timestamp DESC", conn)
+    except:
+        sales_df = pd.DataFrame()
         
     if sales_df.empty:
         st.info("No sales records available yet.")
