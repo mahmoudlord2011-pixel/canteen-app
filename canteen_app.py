@@ -1,290 +1,361 @@
 import streamlit as st
-import sqlite3
 import pandas as pd
+import sqlalchemy as sa
+from sqlalchemy import create_engine, text
+import plotly.express as px
 from datetime import datetime
 
 # ---------------------------------------------------------
-# 1. إعداد قاعدة البيانات الدائمة (SQLite)
+# 1. Page Configuration
 # ---------------------------------------------------------
+st.set_page_config(
+    page_title="BV Canteen Management System",
+    page_icon="🍔",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# ---------------------------------------------------------
+# 2. Translations Dictionary (Arabic & English)
+# ---------------------------------------------------------
+TRANSLATIONS = {
+    "AR": {
+        "title": "🏫 نظام إدارة كانتين المدرسة - Bright Vision",
+        "switch_lang": "🌐 Language / اللغة",
+        "nav_menu": "📌 القائمة الرئيسية",
+        "sales_page": "🛒 تسجيل المبيعات",
+        "products_page": "📦 إدارة المنتجات",
+        "dashboard_page": "📊 التقارير والإحصائيات",
+        "settings_page": "⚙️ الإعدادات والأمان",
+        "system_locked": "🔒 النظام مغلق حالياً بقرار من الإدارة.",
+        "kill_switch_active": "الرجاء التواصل مع المسين لقفل/فتح النظام.",
+        "add_sale": "تسجيل عملية بيع جديدة",
+        "select_product": "اختر المنتج",
+        "quantity": "الكمية",
+        "unit_price": "سعر الوحدة",
+        "total_price": "الإجمالي",
+        "buyer_name": "اسم الطالب / المشترِي (اختياري)",
+        "complete_sale": "✅ إتمام عملية البيع",
+        "sale_success": "تم تسجيل عملية البيع بنجاح!",
+        "insufficient_stock": "⚠️ الكمية المتاحة في المخزون غير كافية!",
+        "out_of_stock": "❌ هذا المنتج غير متوفر في المخزون حالياً!",
+        "add_product": "إضافة منتج جديد",
+        "product_name": "اسم المنتج",
+        "cost_price": "سعر التكلفة (الشراء)",
+        "selling_price": "سعر البيع",
+        "stock_qty": "الكمية الأولية في المخزون",
+        "save_product": "➕ حفظ المنتج",
+        "product_added": "تمت إضافة المنتج بنجاح!",
+        "current_inventory": "📋 المخزون الحالي",
+        "total_sales_val": "إجمالي المبيعات",
+        "total_profit_val": "إجمالي الأرباح",
+        "total_transactions": "عدد العمليات",
+        "recent_sales": "📜 سجل المبيعات الأخيرة",
+        "sales_chart": "📈 رسم بياني للمبيعات",
+        "kill_switch_title": "🚨 مفتاح الإغلاق السريع (Kill Switch)",
+        "lock_system": "قفل النظام",
+        "unlock_system": "فتح النظام",
+        "status_locked": "الحالة: النظام مغلق 🔴",
+        "status_unlocked": "الحالة: النظام يعمل بنجاح 🟢",
+        "currency": "ج.م"
+    },
+    "EN": {
+        "title": "🏫 Bright Vision Canteen Management System",
+        "switch_lang": "🌐 Language / اللغة",
+        "nav_menu": "📌 Navigation",
+        "sales_page": "🛒 Sales POS",
+        "products_page": "📦 Product Management",
+        "dashboard_page": "📊 Analytics & Reports",
+        "settings_page": "⚙️ Settings & Security",
+        "system_locked": "🔒 System is currently locked by administration.",
+        "kill_switch_active": "Please contact admin to enable access.",
+        "add_sale": "Register New Sale",
+        "select_product": "Select Product",
+        "quantity": "Quantity",
+        "unit_price": "Unit Price",
+        "total_price": "Total Price",
+        "buyer_name": "Student/Buyer Name (Optional)",
+        "complete_sale": "✅ Complete Sale",
+        "sale_success": "Sale registered successfully!",
+        "insufficient_stock": "⚠️ Insufficient stock available!",
+        "out_of_stock": "❌ Out of stock!",
+        "add_product": "Add New Product",
+        "product_name": "Product Name",
+        "cost_price": "Cost Price",
+        "selling_price": "Selling Price",
+        "stock_qty": "Initial Stock Quantity",
+        "save_product": "➕ Save Product",
+        "product_added": "Product added successfully!",
+        "current_inventory": "📋 Current Inventory",
+        "total_sales_val": "Total Sales",
+        "total_profit_val": "Total Profit",
+        "total_transactions": "Total Transactions",
+        "recent_sales": "📜 Recent Sales History",
+        "sales_chart": "📈 Sales Analytics",
+        "kill_switch_title": "🚨 Emergency Kill Switch",
+        "lock_system": "Lock System",
+        "unlock_system": "Unlock System",
+        "status_locked": "Status: System Locked 🔴",
+        "status_unlocked": "Status: System Active 🟢",
+        "currency": "EGP"
+    }
+}
+
+# ---------------------------------------------------------
+# 3. Language Selector Session State
+# ---------------------------------------------------------
+if "lang" not in st.session_state:
+    st.session_state.lang = "AR"
+
+with st.sidebar:
+    lang_choice = st.radio(
+        TRANSLATIONS[st.session_state.lang]["switch_lang"],
+        options=["العربية (AR)", "English (EN)"],
+        index=0 if st.session_state.lang == "AR" else 1
+    )
+    st.session_state.lang = "AR" if "AR" in lang_choice else "EN"
+
+t = TRANSLATIONS[st.session_state.lang]
+
+# ---------------------------------------------------------
+# 4. Database Connection (Supabase / Postgres)
+# ---------------------------------------------------------
+@st.cache_resource
+def get_db_engine():
+    try:
+        db_url = st.secrets["postgres"]["url"]
+        engine = create_engine(db_url, pool_pre_ping=True)
+        return engine
+    except Exception as e:
+        st.error(f"Database connection error: {e}")
+        return None
+
+engine = get_db_engine()
+
+# Initialize Tables
 def init_db():
-    conn = sqlite3.connect("canteen.db", check_same_thread=False)
-    cursor = conn.cursor()
-    # جدول المنتجات
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS products (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT UNIQUE,
-            category TEXT,
-            price REAL
-        )
-    """)
-    # جدول الطلبات والمبيعات
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS orders (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            timestamp TEXT,
-            items TEXT,
-            total_price REAL,
-            role TEXT
-        )
-    """)
-    
-    # إضافة منتجات افتراضية إذا كانت قاعدة البيانات فارغة
-    cursor.execute("SELECT COUNT(*) FROM products")
-    if cursor.fetchone()[0] == 0:
-        default_products = [
-            ("ساندوتش جبنة", "🥪 ساندوتشات", 15.0),
-            ("ساندوتش بانييه", "🥪 ساندوتشات", 35.0),
-            ("عصير فريش", "🥤 مشروبات", 20.0),
-            ("زجاجة مياه", "🥤 مشروبات", 7.0),
-            ("شيبسي", "🍿 سناكس", 10.0),
-            ("بسكويت", "🍿 سناكس", 8.0)
-        ]
-        cursor.executemany("INSERT INTO products (name, category, price) VALUES (?, ?, ?)", default_products)
-        conn.commit()
-    conn.close()
+    if engine is None:
+        return
+    with engine.begin() as conn:
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS products (
+                id SERIAL PRIMARY KEY,
+                name TEXT UNIQUE NOT NULL,
+                cost_price REAL NOT NULL,
+                selling_price REAL NOT NULL,
+                stock INT NOT NULL
+            );
+        """))
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS sales (
+                id SERIAL PRIMARY KEY,
+                product_name TEXT NOT NULL,
+                quantity INT NOT NULL,
+                unit_price REAL NOT NULL,
+                total_price REAL NOT NULL,
+                profit REAL NOT NULL,
+                buyer_name TEXT,
+                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        """))
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS system_config (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            );
+        """))
+        # Default Kill Switch State
+        conn.execute(text("""
+            INSERT INTO system_config (key, value)
+            VALUES ('is_locked', 'false')
+            ON CONFLICT (key) DO NOTHING;
+        """))
 
 init_db()
 
-def get_db_connection():
-    return sqlite3.connect("canteen.db", check_same_thread=False)
+# Helpers
+def is_system_locked():
+    if engine is None:
+        return False
+    with engine.connect() as conn:
+        res = conn.execute(text("SELECT value FROM system_config WHERE key = 'is_locked'")).fetchone()
+        return res[0] == "true" if res else False
+
+def set_system_lock(locked: bool):
+    val = "true" if locked else "false"
+    with engine.begin() as conn:
+        conn.execute(text("UPDATE system_config SET value = :v WHERE key = 'is_locked'"), {"v": val})
 
 # ---------------------------------------------------------
-# 2. ضبط إعدادات الصفحة وحفظ الجلسة في الـ URL
+# 5. Header & Navigation
 # ---------------------------------------------------------
-st.set_page_config(page_title="Smart Canteen - Bright Vision", layout="wide", page_icon="👑")
+st.title(t["title"])
 
-# استرجاع حالة التسجيل من الـ URL إن وجدت (علشان الدخول التلقائي)
-query_params = st.query_params
+locked = is_system_locked()
 
-if 'logged_in' not in st.session_state:
-    if 'user' in query_params and 'role' in query_params:
-        st.session_state['logged_in'] = True
-        st.session_state['user_role'] = query_params['role']
-        st.session_state['is_demo'] = (query_params['role'] == 'demo')
-    else:
-        st.session_state['logged_in'] = False
-        st.session_state['user_role'] = None
-        st.session_state['is_demo'] = False
-
-if 'system_disabled' not in st.session_state:
-    st.session_state['system_disabled'] = False
-
-# تنسيقات الواجهة
-st.markdown("""
-<style>
-    .stButton>button { width: 100%; font-size: 16px; border-radius: 8px; }
-    .sovereign-card { background-color: #3b0764; border: 2px solid #a855f7; padding: 15px; border-radius: 10px; margin-bottom: 20px; }
-    .status-disabled { background-color: #7f1d1d; color: #fca5a5; padding: 20px; border-radius: 10px; text-align: center; }
-</style>
-""", unsafe_allow_html=True)
+with st.sidebar:
+    st.divider()
+    page = st.radio(
+        t["nav_menu"],
+        [t["sales_page"], t["products_page"], t["dashboard_page"], t["settings_page"]]
+    )
 
 # ---------------------------------------------------------
-# 3. حالة إيقاف النظام (Kill Switch)
+# 6. Page Logic
 # ---------------------------------------------------------
-if st.session_state['system_disabled'] and st.session_state.get('user_role') != 'sovereign':
-    st.markdown("""
-        <div class="status-disabled">
-            <h1>⛔ النظام معطل حالياً ⛔</h1>
-            <h3>تم إيقاف تشغيل نظام الكانتين بقرار من المالك الأعظم للنظام (MASTER OODY).</h3>
-            <p>يرجى المراجعة مع إدارة النظام لإعادة التشغيل.</p>
-        </div>
-    """, unsafe_allow_html=True)
-    st.write("---")
-    with st.expander("🔑 تسجيل دخول المالك لإعادة التفعيل"):
-        with st.form("sovereign_unlock"):
-            s_user = st.text_input("اسم المالك:")
-            s_pass = st.text_input("كلمة السر:", type="password")
-            if st.form_submit_button("إلغاء الإيقاف وتفعيل النظام"):
-                if s_user == "oody" and s_pass == "Mahmoud@2011":
-                    st.session_state['system_disabled'] = False
-                    st.session_state['logged_in'] = True
-                    st.session_state['user_role'] = 'sovereign'
-                    st.query_params["user"] = "oody"
-                    st.query_params["role"] = "sovereign"
-                    st.success("تم إعادة تفعيل النظام بنجاح يا ماستر أودي!")
-                    st.rerun()
-                else:
-                    st.error("بيانات غير صحيحة!")
+
+# --- SYSTEM LOCKED CHECK ---
+if locked and page != t["settings_page"]:
+    st.error(t["system_locked"])
+    st.info(t["kill_switch_active"])
     st.stop()
 
-# ---------------------------------------------------------
-# 4. شاشة تسجيل الدخول
-# ---------------------------------------------------------
-if not st.session_state['logged_in']:
-    st.markdown("<h1 style='text-align: center;'>🔐 تسجيل الدخول - نظام الكانتين الذكي</h1>", unsafe_allow_html=True)
+# --- 1. SALES POS PAGE ---
+if page == t["sales_page"]:
+    st.subheader(t["add_sale"])
+    
+    with engine.connect() as conn:
+        products_df = pd.read_sql("SELECT * FROM products WHERE stock > 0 ORDER BY name ASC", conn)
+    
+    if products_df.empty:
+        st.warning(t["out_of_stock"])
+    else:
+        product_list = products_df["name"].tolist()
+        selected_prod_name = st.selectbox(t["select_product"], product_list)
+        
+        prod_data = products_df[products_df["name"] == selected_prod_name].iloc[0]
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            qty = st.number_input(t["quantity"], min_value=1, max_value=int(prod_data["stock"]), value=1, step=1)
+            buyer = st.text_input(t["buyer_name"])
+        
+        with col2:
+            unit_price = prod_data["selling_price"]
+            total_price = unit_price * qty
+            profit = (unit_price - prod_data["cost_price"]) * qty
+            
+            st.metric(t["unit_price"], f"{unit_price:.2f} {t['currency']}")
+            st.metric(t["total_price"], f"{total_price:.2f} {t['currency']}")
+        
+        if st.button(t["complete_sale"], type="primary"):
+            if qty > prod_data["stock"]:
+                st.error(t["insufficient_stock"])
+            else:
+                with engine.begin() as conn:
+                    # Deduct stock
+                    conn.execute(
+                        text("UPDATE products SET stock = stock - :qty WHERE name = :name"),
+                        {"qty": qty, "name": selected_prod_name}
+                    )
+                    # Insert sale
+                    conn.execute(
+                        text("""
+                            INSERT INTO sales (product_name, quantity, unit_price, total_price, profit, buyer_name)
+                            VALUES (:pname, :qty, :uprice, :tprice, :profit, :buyer)
+                        """),
+                        {
+                            "pname": selected_prod_name,
+                            "qty": qty,
+                            "uprice": unit_price,
+                            "tprice": total_price,
+                            "profit": profit,
+                            "buyer": buyer if buyer else "Anonymous"
+                        }
+                    )
+                st.success(t["sale_success"])
+                st.rerun()
+
+# --- 2. PRODUCT MANAGEMENT PAGE ---
+elif page == t["products_page"]:
+    st.subheader(t["add_product"])
+    
+    with st.form("add_prod_form", clear_on_submit=True):
+        p_name = st.text_input(t["product_name"])
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            cost = st.number_input(t["cost_price"], min_value=0.0, step=0.5)
+        with c2:
+            price = st.number_input(t["selling_price"], min_value=0.0, step=0.5)
+        with c3:
+            stock = st.number_input(t["stock_qty"], min_value=0, step=1)
+            
+        submitted = st.form_submit_button(t["save_product"])
+        if submitted:
+            if p_name and price >= 0 and stock >= 0:
+                try:
+                    with engine.begin() as conn:
+                        conn.execute(
+                            text("""
+                                INSERT INTO products (name, cost_price, selling_price, stock)
+                                VALUES (:name, :cost, :price, :stock)
+                                ON CONFLICT (name) DO UPDATE SET
+                                cost_price = EXCLUDED.cost_price,
+                                selling_price = EXCLUDED.selling_price,
+                                stock = products.stock + EXCLUDED.stock;
+                            """),
+                            {"name": p_name, "cost": cost, "price": price, "stock": stock}
+                        )
+                    st.success(t["product_added"])
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Error saving product: {e}")
+
     st.divider()
+    st.subheader(t["current_inventory"])
+    with engine.connect() as conn:
+        inv_df = pd.read_sql("SELECT name, cost_price, selling_price, stock FROM products ORDER BY name ASC", conn)
+    st.dataframe(inv_df, use_container_width=True)
 
-    col1, col2 = st.columns(2, gap="large")
+# --- 3. ANALYTICS & DASHBOARD PAGE ---
+elif page == t["dashboard_page"]:
+    st.subheader(t["dashboard_page"])
+    
+    with engine.connect() as conn:
+        sales_df = pd.read_sql("SELECT * FROM sales ORDER BY timestamp DESC", conn)
+        
+    if sales_df.empty:
+        st.info("No sales records available yet.")
+    else:
+        c1, c2, c3 = st.columns(3)
+        c1.metric(t["total_sales_val"], f"{sales_df['total_price'].sum():.2f} {t['currency']}")
+        c2.metric(t["total_profit_val"], f"{sales_df['profit'].sum():.2f} {t['currency']}")
+        c3.metric(t["total_transactions"], str(len(sales_df)))
+        
+        st.divider()
+        st.subheader(t["sales_chart"])
+        
+        fig = px.bar(
+            sales_df,
+            x="product_name",
+            y="total_price",
+            color="product_name",
+            title=t["sales_chart"],
+            labels={"product_name": "Product", "total_price": "Revenue"}
+        )
+        st.plotly_chart(fig, use_container_width=True)
+        
+        st.subheader(t["recent_sales"])
+        st.dataframe(sales_df, use_container_width=True)
 
+# --- 4. SETTINGS & KILL SWITCH PAGE ---
+elif page == t["settings_page"]:
+    st.subheader(t["kill_switch_title"])
+    
+    current_status = is_system_locked()
+    if current_status:
+        st.error(t["status_locked"])
+    else:
+        st.success(t["status_unlocked"])
+        
+    col1, col2 = st.columns(2)
     with col1:
-        st.subheader("وضع العرض والتجربة (Demo)")
-        st.info("تجربة النظام وتسجيل الطلبات دون التغيير في الحسابات الرئيسية.")
-        if st.button("🚀 بدء جلسة تجريبية (Demo Mode)", type="primary"):
-            st.session_state['logged_in'] = True
-            st.session_state['is_demo'] = True
-            st.session_state['user_role'] = 'demo'
-            st.query_params["user"] = "demo"
-            st.query_params["role"] = "demo"
+        if st.button(t["lock_system"], type="primary", use_container_width=True):
+            set_system_lock(True)
+            st.warning("System Locked!")
             st.rerun()
-
     with col2:
-        st.subheader("تسجيل دخول الحسابات")
-        with st.form("login_form"):
-            username = st.text_input("اسم المستخدم:")
-            password = st.text_input("كلمة المرور:", type="password")
-            submit_login = st.form_submit_button("دخول للنظام")
-
-            if submit_login:
-                role = None
-                if username == "oody" and password == "Mahmoud@2011":
-                    role = 'sovereign'
-                elif username == "admin" and password == "Dr.RagabBV842":
-                    role = 'admin'
-                elif username == "canteen" and password == "canteen 842":
-                    role = 'canteen'
-                elif username == "student" and password == "student123":
-                    role = 'student'
-                
-                if role:
-                    st.session_state['logged_in'] = True
-                    st.session_state['is_demo'] = False
-                    st.session_state['user_role'] = role
-                    st.query_params["user"] = username
-                    st.query_params["role"] = role
-                    st.rerun()
-                else:
-                    st.error("اسم المستخدم أو كلمة المرور غير صحيحة!")
-
-# ---------------------------------------------------------
-# 5. الواجهة الرئيسية بالتطبيق بعد تسجيل الدخول
-# ---------------------------------------------------------
-else:
-    top_col1, top_col2 = st.columns([4, 1])
-    with top_col1:
-        if st.session_state['user_role'] == 'sovereign':
-            st.markdown("### 👑 مرحباً بك يا **MASTER OODY** | المالك الأعلى للنظام")
-        elif st.session_state['is_demo']:
-            st.warning("⚠️️ أنت الآن في **وضع التجربة (Demo Mode)**")
-        else:
-            st.success(f"🟢 تم تسجيل الدخول بصلاحية: **{st.session_state['user_role'].upper()}** (الدخول متذكر تلقائياً 🔓)")
-            
-    with top_col2:
-        if st.button("تسجيل خروج 🚪"):
-            st.session_state['logged_in'] = False
-            st.session_state['is_demo'] = False
-            st.session_state['user_role'] = None
-            st.query_params.clear()
+        if st.button(t["unlock_system"], type="secondary", use_container_width=True):
+            set_system_lock(False)
+            st.success("System Unlocked!")
             st.rerun()
-
-    # لوحة تحكم المالك (Master Oody)
-    if st.session_state['user_role'] == 'sovereign':
-        st.markdown("""<div class="sovereign-card">""", unsafe_allow_html=True)
-        st.subheader("⚡ لوحة تحكم المالك الأعظم (Master Oody Control)")
-        sov_col1, sov_col2 = st.columns(2)
-        with sov_col1:
-            if not st.session_state['system_disabled']:
-                if st.button("🔴 إيقاف النظام بالكامل (Kill Switch)", type="primary"):
-                    st.session_state['system_disabled'] = True
-                    st.warning("تم إيقاف النظام وحظره عن باقي المستخدمين!")
-                    st.rerun()
-            else:
-                if st.button("🟢 إعادة تفعيل النظام (System Restore)"):
-                    st.session_state['system_disabled'] = False
-                    st.success("تم تشغيل النظام بنجاح!")
-                    st.rerun()
-        with sov_col2:
-            st.write(f"حالة النظام الحالية: **{'🛑 معطل' if st.session_state['system_disabled'] else '🟢 يعمل بانتظام'}**")
-        st.markdown("</div>", unsafe_allow_html=True)
-
-    st.title("🍔 نظام الكانتين الذكي - Bright Vision")
-    
-    # تحديد التبويبات بناءً على الصلاحيات
-    user_role = st.session_state['user_role']
-    
-    tabs_to_show = ["🛒 قائمة الطلبات (المنيو)"]
-    if user_role in ['sovereign', 'canteen', 'admin', 'demo']:
-        tabs_to_show.append("📊 المبيعات والتقارير")
-    if user_role in ['sovereign', 'canteen', 'demo']:
-        tabs_to_show.append("⚙️ إدارة المنتجات")
-        
-    created_tabs = st.tabs(tabs_to_show)
-    conn = get_db_connection()
-
-    # --- TAB 1: شراء المنتجات وتسجيل الطلب ---
-    with created_tabs[0]:
-        st.header("تسجيل طلب جديد")
-        df_prod = pd.read_sql("SELECT * FROM products", conn)
-        
-        if df_prod.empty:
-            st.info("لا توجد منتجات مسجلة في المنيو حتى الآن.")
-        else:
-            selected_items = []
-            categories = df_prod['category'].unique()
-            cols = st.columns(len(categories) if len(categories) > 0 else 1)
-            
-            for idx, cat in enumerate(categories):
-                with cols[idx % len(cols)]:
-                    st.subheader(cat)
-                    cat_items = df_prod[df_prod['category'] == cat]
-                    for _, row in cat_items.iterrows():
-                        if st.checkbox(f"{row['name']} - {row['price']} ج.م", key=f"p_{row['id']}"):
-                            selected_items.append(row)
-            
-            if selected_items:
-                total = sum(item['price'] for item in selected_items)
-                items_str = ", ".join([item['name'] for item in selected_items])
-                st.write(f"### الإجمالي: **{total} ج.م**")
-                
-                if st.button("إتمام الطلب وحفظه 💳", type="primary"):
-                    cursor = conn.cursor()
-                    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    cursor.execute("INSERT INTO orders (timestamp, items, total_price, role) VALUES (?, ?, ?, ?)",
-                                   (now_str, items_str, total, user_role))
-                    conn.commit()
-                    st.balloons()
-                    st.success("تم تسجيل الطلب وحفظه بنجاح في قاعدة البيانات! 🎉")
-
-    # --- TAB 2: عرض تقارير المبيعات (Master Oody + الكانتين + الأدمن) ---
-    if "📊 المبيعات والتقارير" in tabs_to_show:
-        tab_idx = tabs_to_show.index("📊 المبيعات والتقارير")
-        with created_tabs[tab_idx]:
-            st.header("📊 إحصائيات وتقارير المبيعات المحفوظة")
-            df_orders = pd.read_sql("SELECT * FROM orders ORDER BY id DESC", conn)
-            
-            if df_orders.empty:
-                st.info("لا توجد مبيعات مسجلة حتى الآن.")
-            else:
-                total_sales = df_orders['total_price'].sum()
-                total_count = len(df_orders)
-                
-                m_col1, m_col2 = st.columns(2)
-                m_col1.metric("إجمالي المبيعات المحفوظة", f"{total_sales:.2f} ج.م")
-                m_col2.metric("عدد الطلبات الكلي", f"{total_count} طلب")
-                
-                st.subheader("سجل الطلبات الأخير:")
-                st.dataframe(df_orders, use_container_dict=True)
-
-    # --- TAB 3: إضافة المنتجات (Master Oody + الكانتين فقط) ---
-    if "⚙️ إدارة المنتجات" in tabs_to_show:
-        tab_idx = tabs_to_show.index("⚙️ إدارة المنتجات")
-        with created_tabs[tab_idx]:
-            st.header("⚙️ إضافة منتج جديد للمنيو")
-            with st.form("add_product_form"):
-                p_name = st.text_input("اسم المنتج:")
-                p_cat = st.selectbox("القسم:", ["🥪 ساندوتشات", "🥤 مشروبات", "🍿 سناكس", "حلويات 🍫"])
-                p_price = st.number_input("السعر (ج.م):", min_value=1.0, value=10.0, step=0.5)
-                submit_p = st.form_submit_button("إضافة للمنيو")
-                
-                if submit_p and p_name:
-                    try:
-                        cursor = conn.cursor()
-                        cursor.execute("INSERT INTO products (name, category, price) VALUES (?, ?, ?)",
-                                       (p_name, p_cat, p_price))
-                        conn.commit()
-                        st.success(f"تم إضافة {p_name} بنجاح ولن يتم مسحه!")
-                        st.rerun()
-                    except Exception as e:
-                        st.error("هذا المنتج موجود بالفعل أو حدث خطأ!")
-
-    conn.close()
