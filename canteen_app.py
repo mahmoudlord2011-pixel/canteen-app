@@ -86,7 +86,7 @@ if st.session_state['system_disabled'] and st.session_state.get('user_role') != 
     st.markdown("""
         <div class="status-disabled">
             <h1>⛔ النظام معطل حالياً ⛔</h1>
-            <h3>تم إيقاف تشغيل نظام الكانتين بقرار من المالك الأعلى للنظام (OODY_SOVEREIGN).</h3>
+            <h3>تم إيقاف تشغيل نظام الكانتين بقرار من المالك الأعظم للنظام (MASTER OODY).</h3>
             <p>يرجى المراجعة مع إدارة النظام لإعادة التشغيل.</p>
         </div>
     """, unsafe_allow_html=True)
@@ -102,14 +102,14 @@ if st.session_state['system_disabled'] and st.session_state.get('user_role') != 
                     st.session_state['user_role'] = 'sovereign'
                     st.query_params["user"] = "oody"
                     st.query_params["role"] = "sovereign"
-                    st.success("تم إعادة تفعيل النظام بنجاح!")
+                    st.success("تم إعادة تفعيل النظام بنجاح يا ماستر أودي!")
                     st.rerun()
                 else:
                     st.error("بيانات غير صحيحة!")
     st.stop()
 
 # ---------------------------------------------------------
-# 4. شاشة تسجيل الدخول (في حالة عدم تسجيلة مسبقاً)
+# 4. شاشة تسجيل الدخول
 # ---------------------------------------------------------
 if not st.session_state['logged_in']:
     st.markdown("<h1 style='text-align: center;'>🔐 تسجيل الدخول - نظام الكانتين الذكي</h1>", unsafe_allow_html=True)
@@ -150,7 +150,6 @@ if not st.session_state['logged_in']:
                     st.session_state['logged_in'] = True
                     st.session_state['is_demo'] = False
                     st.session_state['user_role'] = role
-                    # حفظ بيانات التسجيل في الـ URL لتسجيل الدخول التلقائي في المرات القادمة
                     st.query_params["user"] = username
                     st.query_params["role"] = role
                     st.rerun()
@@ -164,9 +163,9 @@ else:
     top_col1, top_col2 = st.columns([4, 1])
     with top_col1:
         if st.session_state['user_role'] == 'sovereign':
-            st.markdown("### 👑 مرحباً بك يا **OODY SOVEREIGN** | المالك الأعلى للنظام")
+            st.markdown("### 👑 مرحباً بك يا **MASTER OODY** | المالك الأعلى للنظام")
         elif st.session_state['is_demo']:
-            st.warning("⚠️ أنت الآن في **وضع التجربة (Demo Mode)**")
+            st.warning("⚠️️ أنت الآن في **وضع التجربة (Demo Mode)**")
         else:
             st.success(f"🟢 تم تسجيل الدخول بصلاحية: **{st.session_state['user_role'].upper()}** (الدخول متذكر تلقائياً 🔓)")
             
@@ -175,13 +174,13 @@ else:
             st.session_state['logged_in'] = False
             st.session_state['is_demo'] = False
             st.session_state['user_role'] = None
-            st.query_params.clear()  # مسح حفظ الدخول للتسجيل من جديد
+            st.query_params.clear()
             st.rerun()
 
-    # لوحة تحكم المالك
+    # لوحة تحكم المالك (Master Oody)
     if st.session_state['user_role'] == 'sovereign':
         st.markdown("""<div class="sovereign-card">""", unsafe_allow_html=True)
-        st.subheader("⚡ لوحة التحكم المطلقة (Sovereign Control)")
+        st.subheader("⚡ لوحة تحكم المالك الأعظم (Master Oody Control)")
         sov_col1, sov_col2 = st.columns(2)
         with sov_col1:
             if not st.session_state['system_disabled']:
@@ -200,12 +199,20 @@ else:
 
     st.title("🍔 نظام الكانتين الذكي - Bright Vision")
     
-    tab1, tab2, tab3 = st.tabs(["🛒 قائمة الطلبات (المنيو)", "📊 المبيعات والتقارير", "⚙️ إدارة المنتجات"])
-
+    # تحديد التبويبات بناءً على الصلاحيات
+    user_role = st.session_state['user_role']
+    
+    tabs_to_show = ["🛒 قائمة الطلبات (المنيو)"]
+    if user_role in ['sovereign', 'canteen', 'admin', 'demo']:
+        tabs_to_show.append("📊 المبيعات والتقارير")
+    if user_role in ['sovereign', 'canteen', 'demo']:
+        tabs_to_show.append("⚙️ إدارة المنتجات")
+        
+    created_tabs = st.tabs(tabs_to_show)
     conn = get_db_connection()
 
     # --- TAB 1: شراء المنتجات وتسجيل الطلب ---
-    with tab1:
+    with created_tabs[0]:
         st.header("تسجيل طلب جديد")
         df_prod = pd.read_sql("SELECT * FROM products", conn)
         
@@ -233,33 +240,36 @@ else:
                     cursor = conn.cursor()
                     now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     cursor.execute("INSERT INTO orders (timestamp, items, total_price, role) VALUES (?, ?, ?, ?)",
-                                   (now_str, items_str, total, st.session_state['user_role']))
+                                   (now_str, items_str, total, user_role))
                     conn.commit()
                     st.balloons()
                     st.success("تم تسجيل الطلب وحفظه بنجاح في قاعدة البيانات! 🎉")
 
-    # --- TAB 2: عرض تقارير المبيعات المحفوظة ---
-    with tab2:
-        st.header("📊 إحصائيات وتقارير المبيعات المحفوظة")
-        df_orders = pd.read_sql("SELECT * FROM orders ORDER BY id DESC", conn)
-        
-        if df_orders.empty:
-            st.info("لا توجد مبيعات مسجلة حتى الآن.")
-        else:
-            total_sales = df_orders['total_price'].sum()
-            total_count = len(df_orders)
+    # --- TAB 2: عرض تقارير المبيعات (Master Oody + الكانتين + الأدمن) ---
+    if "📊 المبيعات والتقارير" in tabs_to_show:
+        tab_idx = tabs_to_show.index("📊 المبيعات والتقارير")
+        with created_tabs[tab_idx]:
+            st.header("📊 إحصائيات وتقارير المبيعات المحفوظة")
+            df_orders = pd.read_sql("SELECT * FROM orders ORDER BY id DESC", conn)
             
-            m_col1, m_col2 = st.columns(2)
-            m_col1.metric("إجمالي المبيعات المحفوظة", f"{total_sales:.2f} ج.م")
-            m_col2.metric("عدد الطلبات الكلي", f"{total_count} طلب")
-            
-            st.subheader("سجل الطلبات الأخير:")
-            st.dataframe(df_orders, use_container_dict=True)
+            if df_orders.empty:
+                st.info("لا توجد مبيعات مسجلة حتى الآن.")
+            else:
+                total_sales = df_orders['total_price'].sum()
+                total_count = len(df_orders)
+                
+                m_col1, m_col2 = st.columns(2)
+                m_col1.metric("إجمالي المبيعات المحفوظة", f"{total_sales:.2f} ج.م")
+                m_col2.metric("عدد الطلبات الكلي", f"{total_count} طلب")
+                
+                st.subheader("سجل الطلبات الأخير:")
+                st.dataframe(df_orders, use_container_dict=True)
 
-    # --- TAB 3: إضافة وتعديل المنتجات دائمًا ---
-    with tab3:
-        st.header("⚙️ إضافة منتج جديد للمنيو")
-        if st.session_state['user_role'] in ['sovereign', 'admin']:
+    # --- TAB 3: إضافة المنتجات (Master Oody + الكانتين فقط) ---
+    if "⚙️ إدارة المنتجات" in tabs_to_show:
+        tab_idx = tabs_to_show.index("⚙️ إدارة المنتجات")
+        with created_tabs[tab_idx]:
+            st.header("⚙️ إضافة منتج جديد للمنيو")
             with st.form("add_product_form"):
                 p_name = st.text_input("اسم المنتج:")
                 p_cat = st.selectbox("القسم:", ["🥪 ساندوتشات", "🥤 مشروبات", "🍿 سناكس", "حلويات 🍫"])
@@ -276,7 +286,5 @@ else:
                         st.rerun()
                     except Exception as e:
                         st.error("هذا المنتج موجود بالفعل أو حدث خطأ!")
-        else:
-            st.warning("⚠️ هذه الصلاحية متوفرة للأدمن والمالك فقط.")
 
     conn.close()
