@@ -51,6 +51,21 @@ def db_update(table, match_col, match_val, data):
         return False
 
 # ---------------------------------------------------------
+# System Lock Check
+# ---------------------------------------------------------
+def is_system_locked():
+    df = db_get("system_config")
+    if not df.empty and "key" in df.columns and "value" in df.columns:
+        row = df[df["key"] == "is_locked"]
+        if not row.empty:
+            return str(row.iloc[0]["value"]).lower() == "true"
+    return False
+
+def set_system_lock(locked: bool):
+    val = "true" if locked else "false"
+    db_update("system_config", "key", "is_locked", {"value": val})
+
+# ---------------------------------------------------------
 # Translations
 # ---------------------------------------------------------
 TRANSLATIONS = {
@@ -58,9 +73,20 @@ TRANSLATIONS = {
         "title": "🏫 نظام إدارة كانتين المدرسة - Bright Vision",
         "switch_lang": "🌐 Language / اللغة",
         "nav_menu": "📌 القائمة الرئيسية",
-        "sales_page": "🛒 تسجيل المبيعات",
-        "products_page": "📦 إدارة المنتجات",
-        "dashboard_page": "📊 التقارير والإحصائيات",
+        "sales_page": "🛒 تسجيل المبيعات (POS)",
+        "products_page": "📦 إدارة المنتجات والمخزون",
+        "dashboard_page": "📊 التقارير والإحصائيات المالية",
+        "settings_page": "⚙️ الإعدادات والأمان (الأدمن)",
+        "login_title": "🔐 تسجيل الدخول للنظام",
+        "select_role": "اختر نوع الحساب",
+        "role_student": "👤 طالب / كاشير",
+        "role_admin": "👑 مدير النظام (Admin)",
+        "admin_password": "كلمة سر الأدمن",
+        "login_btn": "دخول",
+        "logout_btn": "تسجيل الخروج",
+        "wrong_pass": "❌ كلمة السر غير صحيحة!",
+        "system_locked": "🔒 النظام مغلق حالياً بقرار من الإدارة.",
+        "kill_switch_active": "الرجاء التواصل مع إدارة المدرسة لفتح السيستم.",
         "add_sale": "تسجيل عملية بيع جديدة",
         "select_product": "اختر المنتج",
         "quantity": "الكمية",
@@ -71,17 +97,24 @@ TRANSLATIONS = {
         "sale_success": "تم تسجيل عملية البيع بنجاح!",
         "insufficient_stock": "⚠️ الكمية المتاحة غير كافية!",
         "out_of_stock": "❌ لا توجد منتجات متاحة حالياً!",
-        "add_product": "إضافة منتج جديد",
+        "add_product": "إضافة / تحديث منتج",
         "product_name": "اسم المنتج",
         "cost_price": "سعر التكلفة",
         "selling_price": "سعر البيع",
-        "stock_qty": "الكمية في المخزون",
+        "stock_qty": "الكمية المضافة للمخزون",
         "save_product": "➕ حفظ المنتج",
-        "product_added": "تمت إضافة المنتج بنجاح!",
+        "product_added": "تم حفظ المنتج بنجاح!",
         "current_inventory": "📋 المخزون الحالي",
         "total_sales_val": "إجمالي المبيعات",
-        "total_profit_val": "إجمالي الأرباح",
+        "total_profit_val": "إجمالي الأرباح الصافية",
         "total_transactions": "عدد العمليات",
+        "recent_sales": "📜 سجل المبيعات الأخيرة",
+        "sales_chart": "📈 رسم بياني للمبيعات",
+        "kill_switch_title": "🚨 مفتاح الإغلاق السريع (Kill Switch)",
+        "lock_system": "🔒 قفل النظام فوراً",
+        "unlock_system": "🔓 فتح النظام",
+        "status_locked": "الحالة الحالية: النظام مغلق 🔴",
+        "status_unlocked": "الحالة الحالية: النظام يعمل بنجاح 🟢",
         "currency": "ج.م"
     },
     "EN": {
@@ -89,35 +122,57 @@ TRANSLATIONS = {
         "switch_lang": "🌐 Language / اللغة",
         "nav_menu": "📌 Navigation",
         "sales_page": "🛒 Sales POS",
-        "products_page": "📦 Product Management",
-        "dashboard_page": "📊 Analytics & Reports",
+        "products_page": "📦 Product & Stock Management",
+        "dashboard_page": "📊 Financial Analytics",
+        "settings_page": "⚙️ Admin Settings & Security",
+        "login_title": "🔐 System Login",
+        "select_role": "Select Account Role",
+        "role_student": "👤 Student / Cashier",
+        "role_admin": "👑 Administrator",
+        "admin_password": "Admin Password",
+        "login_btn": "Login",
+        "logout_btn": "Logout",
+        "wrong_pass": "❌ Incorrect Admin Password!",
+        "system_locked": "🔒 System is currently locked by administration.",
+        "kill_switch_active": "Please contact school administration.",
         "add_sale": "Register New Sale",
         "select_product": "Select Product",
         "quantity": "Quantity",
         "unit_price": "Unit Price",
         "total_price": "Total Price",
-        "buyer_name": "Student/Buyer Name (Optional)",
+        "buyer_name": "Buyer Name (Optional)",
         "complete_sale": "✅ Complete Sale",
         "sale_success": "Sale registered successfully!",
         "insufficient_stock": "⚠️ Insufficient stock!",
         "out_of_stock": "❌ Out of stock!",
-        "add_product": "Add New Product",
+        "add_product": "Add / Update Product",
         "product_name": "Product Name",
         "cost_price": "Cost Price",
         "selling_price": "Selling Price",
-        "stock_qty": "Initial Stock Quantity",
+        "stock_qty": "Stock Quantity to Add",
         "save_product": "➕ Save Product",
-        "product_added": "Product added successfully!",
+        "product_added": "Product saved successfully!",
         "current_inventory": "📋 Current Inventory",
-        "total_sales_val": "Total Sales",
-        "total_profit_val": "Total Profit",
-        "total_transactions": "Total Transactions",
+        "total_sales_val": "Total Revenue",
+        "total_profit_val": "Net Profit",
+        "total_transactions": "Transactions",
+        "recent_sales": "📜 Recent Transactions",
+        "sales_chart": "📈 Sales Analytics",
+        "kill_switch_title": "🚨 Emergency Kill Switch",
+        "lock_system": "🔒 Lock System",
+        "unlock_system": "🔓 Unlock System",
+        "status_locked": "Status: System Locked 🔴",
+        "status_unlocked": "Status: System Active 🟢",
         "currency": "EGP"
     }
 }
 
+# Session State Setup
 if "lang" not in st.session_state:
     st.session_state.lang = "AR"
+
+if "user_role" not in st.session_state:
+    st.session_state.user_role = None
 
 with st.sidebar:
     lang_choice = st.radio(
@@ -129,14 +184,61 @@ with st.sidebar:
 
 t = TRANSLATIONS[st.session_state.lang]
 
+# ---------------------------------------------------------
+# Login Screen Logic
+# ---------------------------------------------------------
+if st.session_state.user_role is None:
+    st.title(t["title"])
+    st.subheader(t["login_title"])
+    
+    col1, col2 = st.columns([1, 2])
+    with col1:
+        role = st.selectbox(t["select_role"], [t["role_student"], t["role_admin"]])
+        
+        if role == t["role_admin"]:
+            pwd = st.text_input(t["admin_password"], type="password")
+            if st.button(t["login_btn"], type="primary"):
+                if pwd == "admin123":  # كلمة سر الأدمن
+                    st.session_state.user_role = "admin"
+                    st.rerun()
+                else:
+                    st.error(t["wrong_pass"])
+        else:
+            if st.button(t["login_btn"], type="primary"):
+                st.session_state.user_role = "student"
+                st.rerun()
+    st.stop()
+
+# Header & Sidebar Navigation
 st.title(t["title"])
 
 with st.sidebar:
+    st.write(f"**الحساب الحالي:** {t['role_admin'] if st.session_state.user_role == 'admin' else t['role_student']}")
+    if st.button(t["logout_btn"]):
+        st.session_state.user_role = None
+        st.rerun()
     st.divider()
-    page = st.radio(
-        t["nav_menu"],
-        [t["sales_page"], t["products_page"], t["dashboard_page"]]
-    )
+    
+    menu_options = [t["sales_page"]]
+    if st.session_state.user_role == "admin":
+        menu_options.extend([t["products_page"], t["dashboard_page"], t["settings_page"]])
+    else:
+        menu_options.append(t["products_page"]) # الطالب يشاهد المخزون بدون تعديل
+        
+    page = st.radio(t["nav_menu"], menu_options)
+
+# ---------------------------------------------------------
+# Check System Lock Status
+# ---------------------------------------------------------
+locked = is_system_locked()
+if locked and st.session_state.user_role != "admin":
+    st.error(t["system_locked"])
+    st.info(t["kill_switch_active"])
+    st.stop()
+
+# ---------------------------------------------------------
+# Page Logic
+# ---------------------------------------------------------
 
 # --- 1. SALES PAGE ---
 if page == t["sales_page"]:
@@ -181,35 +283,68 @@ if page == t["sales_page"]:
 
 # --- 2. PRODUCTS PAGE ---
 elif page == t["products_page"]:
-    st.subheader(t["add_product"])
-    with st.form("add_p"):
-        p_name = st.text_input(t["product_name"])
-        c1, c2, c3 = st.columns(3)
-        cost = c1.number_input(t["cost_price"], min_value=0.0)
-        price = c2.number_input(t["selling_price"], min_value=0.0)
-        stock = c3.number_input(t["stock_qty"], min_value=0, step=1)
-        
-        if st.form_submit_button(t["save_product"]):
-            if p_name:
-                if db_insert("products", {"name": p_name, "cost_price": cost, "selling_price": price, "stock": stock}):
+    if st.session_state.user_role == "admin":
+        st.subheader(t["add_product"])
+        with st.form("add_p"):
+            p_name = st.text_input(t["product_name"])
+            c1, c2, c3 = st.columns(3)
+            cost = c1.number_input(t["cost_price"], min_value=0.0)
+            price = c2.number_input(t["selling_price"], min_value=0.0)
+            stock = c3.number_input(t["stock_qty"], min_value=0, step=1)
+            
+            if st.form_submit_button(t["save_product"]):
+                if p_name:
+                    db_insert("products", {"name": p_name, "cost_price": cost, "selling_price": price, "stock": stock})
                     st.success(t["product_added"])
                     st.rerun()
+        st.divider()
 
-    st.divider()
     st.subheader(t["current_inventory"])
     inv = db_get("products")
     if not inv.empty:
-        st.dataframe(inv, use_container_width=True)
+        if st.session_state.user_role != "admin":
+            display_inv = inv[["name", "selling_price", "stock"]].copy()
+            st.dataframe(display_inv, use_container_width=True)
+        else:
+            st.dataframe(inv, use_container_width=True)
 
-# --- 3. DASHBOARD PAGE ---
+# --- 3. DASHBOARD PAGE (ADMIN ONLY) ---
 elif page == t["dashboard_page"]:
     st.subheader(t["dashboard_page"])
     sales = db_get("sales")
     if sales.empty:
-        st.info("No sales recorded yet.")
+        st.info("لا توجد مبيعات مسجلة حتى الآن.")
     else:
         c1, c2, c3 = st.columns(3)
         c1.metric(t["total_sales_val"], f"{sales['total_price'].sum():.2f} {t['currency']}")
         c2.metric(t["total_profit_val"], f"{sales['profit'].sum():.2f} {t['currency']}")
         c3.metric(t["total_transactions"], str(len(sales)))
+        
+        st.divider()
+        fig = px.bar(sales, x="product_name", y="total_price", color="product_name", title=t["sales_chart"])
+        st.plotly_chart(fig, use_container_width=True)
+        
+        st.subheader(t["recent_sales"])
         st.dataframe(sales, use_container_width=True)
+
+# --- 4. SETTINGS & KILL SWITCH (ADMIN ONLY) ---
+elif page == t["settings_page"]:
+    st.subheader(t["kill_switch_title"])
+    
+    current_status = is_system_locked()
+    if current_status:
+        st.error(t["status_locked"])
+    else:
+        st.success(t["status_unlocked"])
+        
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button(t["lock_system"], type="primary", use_container_width=True):
+            set_system_lock(True)
+            st.warning("تم إغلاق النظام!")
+            st.rerun()
+    with col2:
+        if st.button(t["unlock_system"], type="secondary", use_container_width=True):
+            set_system_lock(False)
+            st.success("تم فتح النظام!")
+            st.rerun()
