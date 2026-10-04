@@ -1,22 +1,76 @@
 import streamlit as st
+import sqlite3
 import pandas as pd
 from datetime import datetime
 
-# ضبط إعدادات الصفحة
+# ---------------------------------------------------------
+# 1. إعداد قاعدة البيانات الدائمة (SQLite)
+# ---------------------------------------------------------
+def init_db():
+    conn = sqlite3.connect("canteen.db", check_same_thread=False)
+    cursor = conn.cursor()
+    # جدول المنتجات
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS products (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT UNIQUE,
+            category TEXT,
+            price REAL
+        )
+    """)
+    # جدول الطلبات والمبيعات
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS orders (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp TEXT,
+            items TEXT,
+            total_price REAL,
+            role TEXT
+        )
+    """)
+    
+    # إضافة منتجات افتراضية إذا كانت قاعدة البيانات فارغة
+    cursor.execute("SELECT COUNT(*) FROM products")
+    if cursor.fetchone()[0] == 0:
+        default_products = [
+            ("ساندوتش جبنة", "🥪 ساندوتشات", 15.0),
+            ("ساندوتش بانييه", "🥪 ساندوتشات", 35.0),
+            ("عصير فريش", "🥤 مشروبات", 20.0),
+            ("زجاجة مياه", "🥤 مشروبات", 7.0),
+            ("شيبسي", "🍿 سناكس", 10.0),
+            ("بسكويت", "🍿 سناكس", 8.0)
+        ]
+        cursor.executemany("INSERT INTO products (name, category, price) VALUES (?, ?, ?)", default_products)
+        conn.commit()
+    conn.close()
+
+init_db()
+
+def get_db_connection():
+    return sqlite3.connect("canteen.db", check_same_thread=False)
+
+# ---------------------------------------------------------
+# 2. ضبط إعدادات الصفحة وحفظ الجلسة في الـ URL
+# ---------------------------------------------------------
 st.set_page_config(page_title="Smart Canteen - Bright Vision", layout="wide", page_icon="👑")
 
-# إدارة حالة الجلسة والإيقاف الطارئ للنظام (Kill Switch)
+# استرجاع حالة التسجيل من الـ URL إن وجدت (علشان الدخول التلقائي)
+query_params = st.query_params
+
+if 'logged_in' not in st.session_state:
+    if 'user' in query_params and 'role' in query_params:
+        st.session_state['logged_in'] = True
+        st.session_state['user_role'] = query_params['role']
+        st.session_state['is_demo'] = (query_params['role'] == 'demo')
+    else:
+        st.session_state['logged_in'] = False
+        st.session_state['user_role'] = None
+        st.session_state['is_demo'] = False
+
 if 'system_disabled' not in st.session_state:
     st.session_state['system_disabled'] = False
 
-if 'logged_in' not in st.session_state:
-    st.session_state['logged_in'] = False
-if 'is_demo' not in st.session_state:
-    st.session_state['is_demo'] = False
-if 'user_role' not in st.session_state:
-    st.session_state['user_role'] = None
-
-# تنسيقات واجهة المظهر والتصميم
+# تنسيقات الواجهة
 st.markdown("""
 <style>
     .stButton>button { width: 100%; font-size: 16px; border-radius: 8px; }
@@ -25,7 +79,9 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# ---- في حالة إيقاف النظام بالكامل من قبل Oody ----
+# ---------------------------------------------------------
+# 3. حالة إيقاف النظام (Kill Switch)
+# ---------------------------------------------------------
 if st.session_state['system_disabled'] and st.session_state.get('user_role') != 'sovereign':
     st.markdown("""
         <div class="status-disabled">
@@ -34,7 +90,6 @@ if st.session_state['system_disabled'] and st.session_state.get('user_role') != 
             <p>يرجى المراجعة مع إدارة النظام لإعادة التشغيل.</p>
         </div>
     """, unsafe_allow_html=True)
-    
     st.write("---")
     with st.expander("🔑 تسجيل دخول المالك لإعادة التفعيل"):
         with st.form("sovereign_unlock"):
@@ -45,86 +100,85 @@ if st.session_state['system_disabled'] and st.session_state.get('user_role') != 
                     st.session_state['system_disabled'] = False
                     st.session_state['logged_in'] = True
                     st.session_state['user_role'] = 'sovereign'
+                    st.query_params["user"] = "oody"
+                    st.query_params["role"] = "sovereign"
                     st.success("تم إعادة تفعيل النظام بنجاح!")
                     st.rerun()
                 else:
                     st.error("بيانات غير صحيحة!")
     st.stop()
 
-# ---- الشاشة الأولى: تسجيل الدخول ووضع التجربة (Demo) ----
+# ---------------------------------------------------------
+# 4. شاشة تسجيل الدخول (في حالة عدم تسجيلة مسبقاً)
+# ---------------------------------------------------------
 if not st.session_state['logged_in']:
     st.markdown("<h1 style='text-align: center;'>🔐 تسجيل الدخول - نظام الكانتين الذكي</h1>", unsafe_allow_html=True)
     st.divider()
 
     col1, col2 = st.columns(2, gap="large")
 
-    # العمود الأول: وضع العرض والتجربة Demo Mode
     with col1:
         st.subheader("وضع العرض والتجربة (Demo)")
-        st.info("يمكنك تجربة النظام بالكامل، استعراض المنيو، وتسجيل الطلبات التجريبية والتقارير دون التأثير على البيانات الحقيقية للكانتين.")
-        
+        st.info("تجربة النظام وتسجيل الطلبات دون التغيير في الحسابات الرئيسية.")
         if st.button("🚀 بدء جلسة تجريبية (Demo Mode)", type="primary"):
             st.session_state['logged_in'] = True
             st.session_state['is_demo'] = True
             st.session_state['user_role'] = 'demo'
+            st.query_params["user"] = "demo"
+            st.query_params["role"] = "demo"
             st.rerun()
 
-    # العمود الثاني: تسجيل دخول الحسابات (إدارة / كانتين / المالك / طلاب)
     with col2:
-        st.subheader("تسجيل دخول الإدارة والمشرفين")
+        st.subheader("تسجيل دخول الحسابات")
         with st.form("login_form"):
             username = st.text_input("اسم المستخدم:")
             password = st.text_input("كلمة المرور:", type="password")
             submit_login = st.form_submit_button("دخول للنظام")
 
             if submit_login:
-                # 👑 الحساب الفخم الخاص بـ Oody
+                role = None
                 if username == "oody" and password == "Mahmoud@2011":
-                    st.session_state['logged_in'] = True
-                    st.session_state['is_demo'] = False
-                    st.session_state['user_role'] = 'sovereign'
-                    st.rerun()
-                # ⚙️ حساب الأدمن (د. رجب)
+                    role = 'sovereign'
                 elif username == "admin" and password == "Dr.RagabBV842":
-                    st.session_state['logged_in'] = True
-                    st.session_state['is_demo'] = False
-                    st.session_state['user_role'] = 'admin'
-                    st.rerun()
-                # 🍔 حساب الكانتين
+                    role = 'admin'
                 elif username == "canteen" and password == "canteen 842":
-                    st.session_state['logged_in'] = True
-                    st.session_state['is_demo'] = False
-                    st.session_state['user_role'] = 'canteen'
-                    st.rerun()
-                # 🎓 حساب الطلاب
+                    role = 'canteen'
                 elif username == "student" and password == "student123":
+                    role = 'student'
+                
+                if role:
                     st.session_state['logged_in'] = True
                     st.session_state['is_demo'] = False
-                    st.session_state['user_role'] = 'student'
+                    st.session_state['user_role'] = role
+                    # حفظ بيانات التسجيل في الـ URL لتسجيل الدخول التلقائي في المرات القادمة
+                    st.query_params["user"] = username
+                    st.query_params["role"] = role
                     st.rerun()
                 else:
                     st.error("اسم المستخدم أو كلمة المرور غير صحيحة!")
 
-# ---- الشاشة الثانية: واجهة التطبيق الرئيسية بعد الدخول ----
+# ---------------------------------------------------------
+# 5. الواجهة الرئيسية بالتطبيق بعد تسجيل الدخول
+# ---------------------------------------------------------
 else:
-    # شريط علوي موضح نوع الجلسة
     top_col1, top_col2 = st.columns([4, 1])
     with top_col1:
         if st.session_state['user_role'] == 'sovereign':
             st.markdown("### 👑 مرحباً بك يا **OODY SOVEREIGN** | المالك الأعلى للنظام")
         elif st.session_state['is_demo']:
-            st.warning("⚠️ أنت الآن في **وضع التجربة (Demo Mode)** - التغييرات لن تحفظ في البيانات الأساسية.")
+            st.warning("⚠️ أنت الآن في **وضع التجربة (Demo Mode)**")
         else:
-            st.success(f"🟢 تم تسجيل الدخول بصلاحية: **{st.session_state['user_role'].upper()}**")
+            st.success(f"🟢 تم تسجيل الدخول بصلاحية: **{st.session_state['user_role'].upper()}** (الدخول متذكر تلقائياً 🔓)")
             
     with top_col2:
-        if st.button("خروج 🚪"):
+        if st.button("تسجيل خروج 🚪"):
             st.session_state['logged_in'] = False
             st.session_state['is_demo'] = False
             st.session_state['user_role'] = None
+            st.query_params.clear()  # مسح حفظ الدخول للتسجيل من جديد
             st.rerun()
 
-    # 🔴 لوحة التحكم الخاصة بالمالك (Oody) لتعطيل/تفعيل النظام بضغطة زر
+    # لوحة تحكم المالك
     if st.session_state['user_role'] == 'sovereign':
         st.markdown("""<div class="sovereign-card">""", unsafe_allow_html=True)
         st.subheader("⚡ لوحة التحكم المطلقة (Sovereign Control)")
@@ -146,38 +200,83 @@ else:
 
     st.title("🍔 نظام الكانتين الذكي - Bright Vision")
     
-    # قائمة التنقل بالأقسام
-    tab1, tab2, tab3 = st.tabs(["🛒 قائمة الطلبات (المنيو)", "📊 لوحة التحكم والمبيعات", "⚙️ إدارة المنتجات"])
+    tab1, tab2, tab3 = st.tabs(["🛒 قائمة الطلبات (المنيو)", "📊 المبيعات والتقارير", "⚙️ إدارة المنتجات"])
 
+    conn = get_db_connection()
+
+    # --- TAB 1: شراء المنتجات وتسجيل الطلب ---
     with tab1:
         st.header("تسجيل طلب جديد")
-        st.write("اختر الوجبات والمشروبات المطلوبة:")
-        col_item1, col_item2, col_item3 = st.columns(3)
-        with col_item1:
-            st.subheader("🥪 ساندوتشات")
-            st.checkbox("ساندوتش جبنة - 15 ج.م")
-            st.checkbox("ساندوتش بانييه - 35 ج.م")
-        with col_item2:
-            st.subheader("🥤 مشروبات")
-            st.checkbox("عصير فريش - 20 ج.م")
-            st.checkbox("زجاجة مياه - 7 ج.م")
-        with col_item3:
-            st.subheader("🍿 سناكس")
-            st.checkbox("شيبسي - 10 ج.م")
-            st.checkbox("بسكويت - 8 ج.م")
+        df_prod = pd.read_sql("SELECT * FROM products", conn)
         
-        if st.button("إتمام الطلب 💳"):
-            st.balloons()
-            st.success("تم تسجيل الطلب بنجاح!")
+        if df_prod.empty:
+            st.info("لا توجد منتجات مسجلة في المنيو حتى الآن.")
+        else:
+            selected_items = []
+            categories = df_prod['category'].unique()
+            cols = st.columns(len(categories) if len(categories) > 0 else 1)
+            
+            for idx, cat in enumerate(categories):
+                with cols[idx % len(cols)]:
+                    st.subheader(cat)
+                    cat_items = df_prod[df_prod['category'] == cat]
+                    for _, row in cat_items.iterrows():
+                        if st.checkbox(f"{row['name']} - {row['price']} ج.م", key=f"p_{row['id']}"):
+                            selected_items.append(row)
+            
+            if selected_items:
+                total = sum(item['price'] for item in selected_items)
+                items_str = ", ".join([item['name'] for item in selected_items])
+                st.write(f"### الإجمالي: **{total} ج.م**")
+                
+                if st.button("إتمام الطلب وحفظه 💳", type="primary"):
+                    cursor = conn.cursor()
+                    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    cursor.execute("INSERT INTO orders (timestamp, items, total_price, role) VALUES (?, ?, ?, ?)",
+                                   (now_str, items_str, total, st.session_state['user_role']))
+                    conn.commit()
+                    st.balloons()
+                    st.success("تم تسجيل الطلب وحفظه بنجاح في قاعدة البيانات! 🎉")
 
+    # --- TAB 2: عرض تقارير المبيعات المحفوظة ---
     with tab2:
-        st.header("📊 إحصائيات مبيعات اليوم")
-        st.metric(label="إجمالي مبيعات اليوم", value="1,450 ج.م", delta="+12%")
-        st.metric(label="عدد الطلبات المكتملة", value="48 طلب", delta="+5")
+        st.header("📊 إحصائيات وتقارير المبيعات المحفوظة")
+        df_orders = pd.read_sql("SELECT * FROM orders ORDER BY id DESC", conn)
+        
+        if df_orders.empty:
+            st.info("لا توجد مبيعات مسجلة حتى الآن.")
+        else:
+            total_sales = df_orders['total_price'].sum()
+            total_count = len(df_orders)
+            
+            m_col1, m_col2 = st.columns(2)
+            m_col1.metric("إجمالي المبيعات المحفوظة", f"{total_sales:.2f} ج.م")
+            m_col2.metric("عدد الطلبات الكلي", f"{total_count} طلب")
+            
+            st.subheader("سجل الطلبات الأخير:")
+            st.dataframe(df_orders, use_container_dict=True)
 
+    # --- TAB 3: إضافة وتعديل المنتجات دائمًا ---
     with tab3:
-        st.header("⚙️ إضافة/تعديل المنتجات")
-        st.text_input("اسم المنتج الجديد:")
-        st.number_input("السعر (ج.م):", min_value=1, value=10)
-        if st.button("حفظ المنتج"):
-            st.success("تمت إضافة المنتج بنجاح إلى المنيو!")
+        st.header("⚙️ إضافة منتج جديد للمنيو")
+        if st.session_state['user_role'] in ['sovereign', 'admin']:
+            with st.form("add_product_form"):
+                p_name = st.text_input("اسم المنتج:")
+                p_cat = st.selectbox("القسم:", ["🥪 ساندوتشات", "🥤 مشروبات", "🍿 سناكس", "حلويات 🍫"])
+                p_price = st.number_input("السعر (ج.م):", min_value=1.0, value=10.0, step=0.5)
+                submit_p = st.form_submit_button("إضافة للمنيو")
+                
+                if submit_p and p_name:
+                    try:
+                        cursor = conn.cursor()
+                        cursor.execute("INSERT INTO products (name, category, price) VALUES (?, ?, ?)",
+                                       (p_name, p_cat, p_price))
+                        conn.commit()
+                        st.success(f"تم إضافة {p_name} بنجاح ولن يتم مسحه!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error("هذا المنتج موجود بالفعل أو حدث خطأ!")
+        else:
+            st.warning("⚠️ هذه الصلاحية متوفرة للأدمن والمالك فقط.")
+
+    conn.close()
