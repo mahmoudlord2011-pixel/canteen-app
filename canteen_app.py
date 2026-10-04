@@ -106,16 +106,23 @@ ACCOUNTS = {
     "student": {"pass": "student123", "role": "student", "name": "🎓 حساب الطلاب", "badge": "👤 Student"}
 }
 
+GUEST_DEMO_ACCOUNT = {
+    "role": "student",
+    "name": "🚀 زائر الديمو التجريبي (Demo User)",
+    "badge": "🎓 Guest Demo"
+}
+
 # ---------------------------------------------------------
 # Translations
 # ---------------------------------------------------------
 TRANSLATIONS = {
     "AR": {
         "title": "🏫 نظام إدارة كانتين المدرسة - Bright Vision",
-        "login_title": "🔐 تسجيل الدخول للنظام (Demo System)",
-        "username": "اسم المستخدم (Username)",
-        "password": "كلمة المرور (Password)",
-        "login_btn": "تسجيل الدخول",
+        "login_title": "🔐 تسجيل الدخول للنظام",
+        "username": "اسم المستخدم",
+        "password": "كلمة المرور",
+        "login_btn": "دخول للنظام",
+        "demo_btn": "🚀 دخول سريع بنظام الديمو (Guest Demo)",
         "logout_btn": "تسجيل الخروج",
         "wrong_credentials": "❌ اسم المستخدم أو كلمة المرور غير صحيحة!",
         "system_locked": "🔒 النظام مغلق حالياً بقرار من الإدارة.",
@@ -125,7 +132,6 @@ TRANSLATIONS = {
         "products_page": "📦 إدارة المنتجات والمخزون",
         "dashboard_page": "📊 التقارير والإحصائيات المالية",
         "settings_page": "⚙️ الإعدادات ومفتاح الأمان (Kill Switch)",
-        "demo_info": "💡 وضع الديمو نشط: كل البيانات تفاعلية وتعمل بشكل كامل حتى في حالة الانفصال.",
         "add_sale": "تسجيل عملية بيع جديدة",
         "select_product": "اختر المنتج",
         "quantity": "الكمية المطلوبة",
@@ -157,10 +163,11 @@ TRANSLATIONS = {
     },
     "EN": {
         "title": "🏫 Bright Vision Canteen Management System",
-        "login_title": "🔐 System Login (Demo Mode)",
+        "login_title": "🔐 System Login",
         "username": "Username",
         "password": "Password",
         "login_btn": "Login",
+        "demo_btn": "🚀 Instant Demo Access (Guest Demo)",
         "logout_btn": "Logout",
         "wrong_credentials": "❌ Invalid username or password!",
         "system_locked": "🔒 System is currently locked by administration.",
@@ -170,7 +177,6 @@ TRANSLATIONS = {
         "products_page": "📦 Product & Stock Management",
         "dashboard_page": "📊 Financial Analytics",
         "settings_page": "⚙️ Admin Settings (Kill Switch)",
-        "demo_info": "💡 Demo Mode Active: Fully functional interactive system.",
         "add_sale": "Register New Sale",
         "select_product": "Select Product",
         "quantity": "Quantity",
@@ -230,24 +236,25 @@ st.divider()
 # ---------------------------------------------------------
 if st.session_state.current_user is None:
     st.subheader(t["login_title"])
-    st.info(t["demo_info"])
     
     col_a, col_b, col_c = st.columns([1, 2, 1])
     with col_b:
         u_name = st.text_input(t["username"])
         u_pass = st.text_input(t["password"], type="password")
-        if st.button(t["login_btn"], type="primary", use_container_width=True):
-            if u_name in ACCOUNTS and ACCOUNTS[u_name]["pass"] == u_pass:
-                st.session_state.current_user = ACCOUNTS[u_name]
+        
+        col_b1, col_b2 = st.columns(2)
+        with col_b1:
+            if st.button(t["login_btn"], type="primary", use_container_width=True):
+                if u_name in ACCOUNTS and ACCOUNTS[u_name]["pass"] == u_pass:
+                    st.session_state.current_user = ACCOUNTS[u_name]
+                    st.rerun()
+                else:
+                    st.error(t["wrong_credentials"])
+        with col_b2:
+            if st.button(t["demo_btn"], use_container_width=True):
+                st.session_state.current_user = GUEST_DEMO_ACCOUNT
                 st.rerun()
-            else:
-                st.error(t["wrong_credentials"])
                 
-        with st.expander("🔑 بيانات الحسابات المتاحة للديمو"):
-            st.write("**Master Oody:** `oody` / `Mahmoud@2011`")
-            st.write("**Admin (د. رجب):** `admin` / `Dr.RagabBV842`")
-            st.write("**Canteen:** `canteen` / `canteen 842`")
-            st.write("**Student:** `student` / `student123`")
     st.stop()
 
 # ---------------------------------------------------------
@@ -269,7 +276,7 @@ with st.sidebar:
         nav_options = [t["sales_page"], t["products_page"], t["dashboard_page"], t["settings_page"]]
     elif user_role == "canteen":
         nav_options = [t["sales_page"], t["products_page"]]
-    else:  # Student
+    else:  # Student / Guest
         nav_options = [t["sales_page"], t["products_page"]]
         
     page = st.radio(t["nav_menu"], nav_options)
@@ -315,7 +322,6 @@ if page == t["sales_page"]:
                 
             if st.button(t["complete_sale"], type="primary", use_container_width=True):
                 new_stk = int(row["stock"]) - qty
-                # Update Supabase or Demo State
                 db_update("products", "name", selected, {"stock": new_stk})
                 st.session_state.demo_products.loc[st.session_state.demo_products["name"] == selected, "stock"] = new_stk
                 
@@ -357,12 +363,12 @@ elif page == t["products_page"]:
     st.subheader(t["current_inventory"])
     inv = get_products()
     if not inv.empty:
-        if user_role == "student":
+        if user_role in ["student", "guest"]:
             st.dataframe(inv[["name", "selling_price", "stock"]], use_container_width=True)
         else:
             st.dataframe(inv, use_container_width=True)
 
-# --- 3. DASHBOARD PAGE (ADMIN / MASTER ONLY) ---
+# --- 3. DASHBOARD PAGE ---
 elif page == t["dashboard_page"]:
     st.subheader(t["dashboard_page"])
     sales_df = get_sales()
@@ -382,7 +388,7 @@ elif page == t["dashboard_page"]:
         st.subheader(t["recent_sales"])
         st.dataframe(sales_df, use_container_width=True)
 
-# --- 4. SETTINGS & KILL SWITCH PAGE (ADMIN / MASTER ONLY) ---
+# --- 4. SETTINGS PAGE (KILL SWITCH) ---
 elif page == t["settings_page"]:
     st.subheader(t["kill_switch_title"])
     
