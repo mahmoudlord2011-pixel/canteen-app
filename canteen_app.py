@@ -8,7 +8,7 @@ import plotly.express as px
 # ---------------------------------------------------------
 st.set_page_config(
     page_title="BV Canteen Management System",
-    page_icon="🍔",
+    page_icon="👑",
     layout="wide"
 )
 
@@ -66,27 +66,34 @@ def set_system_lock(locked: bool):
     db_update("system_config", "key", "is_locked", {"value": val})
 
 # ---------------------------------------------------------
+# User Accounts Definition
+# ---------------------------------------------------------
+ACCOUNTS = {
+    "oody": {"pass": "Mahmoud@2011", "role": "master", "name": "👑 Master Oody"},
+    "admin": {"pass": "Dr.RagabBV842", "role": "admin", "name": "⚙️️ د. رجب (Admin)"},
+    "canteen": {"pass": "canteen 842", "role": "canteen", "name": "🍔 حساب الكانتين"},
+    "student": {"pass": "student123", "role": "student", "name": "🎓 حساب الطلاب"}
+}
+
+# ---------------------------------------------------------
 # Translations
 # ---------------------------------------------------------
 TRANSLATIONS = {
     "AR": {
         "title": "🏫 نظام إدارة كانتين المدرسة - Bright Vision",
-        "switch_lang": "🌐 Language / اللغة",
+        "login_title": "🔐 تسجيل الدخول للنظام",
+        "username": "اسم المستخدم",
+        "password": "كلمة المرور",
+        "login_btn": "دخول للنظام",
+        "logout_btn": "تسجيل الخروج",
+        "wrong_credentials": "❌ اسم المستخدم أو كلمة المرور غير صحيحة!",
+        "system_locked": "🔒 النظام مغلق حالياً بقرار من الإدارة.",
+        "kill_switch_active": "الرجاء التواصل مع إدارة المدرسة لفتح السيستم.",
         "nav_menu": "📌 القائمة الرئيسية",
         "sales_page": "🛒 تسجيل المبيعات (POS)",
         "products_page": "📦 إدارة المنتجات والمخزون",
         "dashboard_page": "📊 التقارير والإحصائيات المالية",
-        "settings_page": "⚙️ الإعدادات والأمان (الأدمن)",
-        "login_title": "🔐 تسجيل الدخول للنظام",
-        "select_role": "اختر نوع الحساب",
-        "role_student": "👤 طالب / كاشير",
-        "role_admin": "👑 مدير النظام (Admin)",
-        "admin_password": "كلمة سر الأدمن",
-        "login_btn": "دخول",
-        "logout_btn": "تسجيل الخروج",
-        "wrong_pass": "❌ كلمة السر غير صحيحة!",
-        "system_locked": "🔒 النظام مغلق حالياً بقرار من الإدارة.",
-        "kill_switch_active": "الرجاء التواصل مع إدارة المدرسة لفتح السيستم.",
+        "settings_page": "⚙️ الإعدادات والأمان (Kill Switch)",
         "add_sale": "تسجيل عملية بيع جديدة",
         "select_product": "اختر المنتج",
         "quantity": "الكمية",
@@ -95,7 +102,6 @@ TRANSLATIONS = {
         "buyer_name": "اسم الطالب / المشترِي (اختياري)",
         "complete_sale": "✅ إتمام عملية البيع",
         "sale_success": "تم تسجيل عملية البيع بنجاح!",
-        "insufficient_stock": "⚠️ الكمية المتاحة غير كافية!",
         "out_of_stock": "❌ لا توجد منتجات متاحة حالياً!",
         "add_product": "إضافة / تحديث منتج",
         "product_name": "اسم المنتج",
@@ -119,22 +125,19 @@ TRANSLATIONS = {
     },
     "EN": {
         "title": "🏫 Bright Vision Canteen Management System",
-        "switch_lang": "🌐 Language / اللغة",
+        "login_title": "🔐 System Login",
+        "username": "Username",
+        "password": "Password",
+        "login_btn": "Login",
+        "logout_btn": "Logout",
+        "wrong_credentials": "❌ Invalid username or password!",
+        "system_locked": "🔒 System is currently locked by administration.",
+        "kill_switch_active": "Please contact school administration.",
         "nav_menu": "📌 Navigation",
         "sales_page": "🛒 Sales POS",
         "products_page": "📦 Product & Stock Management",
         "dashboard_page": "📊 Financial Analytics",
-        "settings_page": "⚙️ Admin Settings & Security",
-        "login_title": "🔐 System Login",
-        "select_role": "Select Account Role",
-        "role_student": "👤 Student / Cashier",
-        "role_admin": "👑 Administrator",
-        "admin_password": "Admin Password",
-        "login_btn": "Login",
-        "logout_btn": "Logout",
-        "wrong_pass": "❌ Incorrect Admin Password!",
-        "system_locked": "🔒 System is currently locked by administration.",
-        "kill_switch_active": "Please contact school administration.",
+        "settings_page": "⚙️ Admin Settings (Kill Switch)",
         "add_sale": "Register New Sale",
         "select_product": "Select Product",
         "quantity": "Quantity",
@@ -143,7 +146,6 @@ TRANSLATIONS = {
         "buyer_name": "Buyer Name (Optional)",
         "complete_sale": "✅ Complete Sale",
         "sale_success": "Sale registered successfully!",
-        "insufficient_stock": "⚠️ Insufficient stock!",
         "out_of_stock": "❌ Out of stock!",
         "add_product": "Add / Update Product",
         "product_name": "Product Name",
@@ -167,77 +169,79 @@ TRANSLATIONS = {
     }
 }
 
-# Session State Setup
+# Session State Initialization
 if "lang" not in st.session_state:
     st.session_state.lang = "AR"
 
-if "user_role" not in st.session_state:
-    st.session_state.user_role = None
-
-with st.sidebar:
-    lang_choice = st.radio(
-        TRANSLATIONS[st.session_state.lang]["switch_lang"],
-        options=["العربية (AR)", "English (EN)"],
-        index=0 if st.session_state.lang == "AR" else 1
-    )
-    st.session_state.lang = "AR" if "AR" in lang_choice else "EN"
+if "current_user" not in st.session_state:
+    st.session_state.current_user = None
 
 t = TRANSLATIONS[st.session_state.lang]
 
 # ---------------------------------------------------------
-# Login Screen Logic
+# Top Header & Language Switcher
 # ---------------------------------------------------------
-if st.session_state.user_role is None:
+top_col1, top_col2 = st.columns([4, 1])
+with top_col1:
     st.title(t["title"])
+with top_col2:
+    if st.button("🌐 العربية / English"):
+        st.session_state.lang = "EN" if st.session_state.lang == "AR" else "AR"
+        st.rerun()
+
+st.divider()
+
+# ---------------------------------------------------------
+# Login Logic
+# ---------------------------------------------------------
+if st.session_state.current_user is None:
     st.subheader(t["login_title"])
-    
-    col1, col2 = st.columns([1, 2])
-    with col1:
-        role = st.selectbox(t["select_role"], [t["role_student"], t["role_admin"]])
-        
-        if role == t["role_admin"]:
-            pwd = st.text_input(t["admin_password"], type="password")
-            if st.button(t["login_btn"], type="primary"):
-                if pwd == "admin123":  # كلمة سر الأدمن
-                    st.session_state.user_role = "admin"
-                    st.rerun()
-                else:
-                    st.error(t["wrong_pass"])
-        else:
-            if st.button(t["login_btn"], type="primary"):
-                st.session_state.user_role = "student"
+    col_a, col_b, col_c = st.columns([1, 2, 1])
+    with col_b:
+        user_input = st.text_input(t["username"])
+        pass_input = st.text_input(t["password"], type="password")
+        if st.button(t["login_btn"], type="primary", use_container_width=True):
+            if user_input in ACCOUNTS and ACCOUNTS[user_input]["pass"] == pass_input:
+                st.session_state.current_user = ACCOUNTS[user_input]
                 st.rerun()
+            else:
+                st.error(t["wrong_credentials"])
     st.stop()
 
-# Header & Sidebar Navigation
-st.title(t["title"])
+# ---------------------------------------------------------
+# Sidebar Navigation
+# ---------------------------------------------------------
+user_info = st.session_state.current_user
+user_role = user_info["role"]
 
 with st.sidebar:
-    st.write(f"**الحساب الحالي:** {t['role_admin'] if st.session_state.user_role == 'admin' else t['role_student']}")
-    if st.button(t["logout_btn"]):
-        st.session_state.user_role = None
+    st.markdown(f"### {user_info['name']}")
+    if st.button(t["logout_btn"], use_container_width=True):
+        st.session_state.current_user = None
         st.rerun()
     st.divider()
     
-    menu_options = [t["sales_page"]]
-    if st.session_state.user_role == "admin":
-        menu_options.extend([t["products_page"], t["dashboard_page"], t["settings_page"]])
-    else:
-        menu_options.append(t["products_page"]) # الطالب يشاهد المخزون بدون تعديل
+    # Navigation Permissions
+    if user_role in ["master", "admin"]:
+        pages_available = [t["sales_page"], t["products_page"], t["dashboard_page"], t["settings_page"]]
+    elif user_role == "canteen":
+        pages_available = [t["sales_page"], t["products_page"]]
+    else: # student
+        pages_available = [t["sales_page"], t["products_page"]]
         
-    page = st.radio(t["nav_menu"], menu_options)
+    page = st.radio(t["nav_menu"], pages_available)
 
 # ---------------------------------------------------------
-# Check System Lock Status
+# Check System Lock
 # ---------------------------------------------------------
 locked = is_system_locked()
-if locked and st.session_state.user_role != "admin":
+if locked and user_role not in ["master", "admin"]:
     st.error(t["system_locked"])
     st.info(t["kill_switch_active"])
     st.stop()
 
 # ---------------------------------------------------------
-# Page Logic
+# Pages Content
 # ---------------------------------------------------------
 
 # --- 1. SALES PAGE ---
@@ -283,7 +287,7 @@ if page == t["sales_page"]:
 
 # --- 2. PRODUCTS PAGE ---
 elif page == t["products_page"]:
-    if st.session_state.user_role == "admin":
+    if user_role in ["master", "admin", "canteen"]:
         st.subheader(t["add_product"])
         with st.form("add_p"):
             p_name = st.text_input(t["product_name"])
@@ -302,13 +306,13 @@ elif page == t["products_page"]:
     st.subheader(t["current_inventory"])
     inv = db_get("products")
     if not inv.empty:
-        if st.session_state.user_role != "admin":
+        if user_role == "student":
             display_inv = inv[["name", "selling_price", "stock"]].copy()
             st.dataframe(display_inv, use_container_width=True)
         else:
             st.dataframe(inv, use_container_width=True)
 
-# --- 3. DASHBOARD PAGE (ADMIN ONLY) ---
+# --- 3. DASHBOARD PAGE ---
 elif page == t["dashboard_page"]:
     st.subheader(t["dashboard_page"])
     sales = db_get("sales")
@@ -327,7 +331,7 @@ elif page == t["dashboard_page"]:
         st.subheader(t["recent_sales"])
         st.dataframe(sales, use_container_width=True)
 
-# --- 4. SETTINGS & KILL SWITCH (ADMIN ONLY) ---
+# --- 4. SETTINGS PAGE (KILL SWITCH) ---
 elif page == t["settings_page"]:
     st.subheader(t["kill_switch_title"])
     
