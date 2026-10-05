@@ -40,7 +40,7 @@ st.markdown("""
         align-items: center;
     }
 
-    /* Custom Styling for Streamlit Tabs (Matching Video Bar) */
+    /* Custom Styling for Streamlit Tabs */
     .stTabs [data-baseweb="tab-list"] {
         gap: 8px;
         background-color: #0e1117;
@@ -67,7 +67,25 @@ st.markdown("""
         box-shadow: 0px 2px 10px rgba(255, 75, 75, 0.4);
     }
 
-    /* Kill Switch Button Style */
+    /* Order Card Style matching Image 1 */
+    .order-card {
+        border: 2px solid #363b4e;
+        border-radius: 12px;
+        padding: 15px;
+        background-color: #161922;
+        margin-bottom: 15px;
+    }
+
+    .change-box {
+        background-color: #2e7d32;
+        color: #ffffff;
+        padding: 10px;
+        border-radius: 8px;
+        font-weight: bold;
+        text-align: center;
+        margin: 10px 0;
+    }
+
     .stButton>button[kind="primary"] {
         border-radius: 8px;
         font-weight: bold;
@@ -128,8 +146,8 @@ def db_update(table, match_col, match_val, data):
 # ---------------------------------------------------------
 if "demo_products" not in st.session_state:
     st.session_state.demo_products = pd.DataFrame([
-        {"id": 1, "name": "ساندوتش جبنة", "category": "ساندوتشات", "cost_price": 10.0, "selling_price": 15.0, "stock": 20},
-        {"id": 2, "name": "ساندوتش كفتة", "category": "ساندوتشات", "cost_price": 25.0, "selling_price": 35.0, "stock": 15},
+        {"id": 1, "name": "ساندوتش بطاطس", "category": "ساندوتشات", "cost_price": 12.0, "selling_price": 20.0, "stock": 20},
+        {"id": 2, "name": "باكت بطاطس", "category": "ساندوتشات", "cost_price": 10.0, "selling_price": 15.0, "stock": 15},
         {"id": 3, "name": "ساندوتش بانييه", "category": "ساندوتشات", "cost_price": 25.0, "selling_price": 35.0, "stock": 10},
         {"id": 4, "name": "عصير فريش", "category": "مشروبات", "cost_price": 12.0, "selling_price": 20.0, "stock": 25},
         {"id": 5, "name": "زجاجة مياه", "category": "مشروبات", "cost_price": 4.0, "selling_price": 7.5, "stock": 50}
@@ -137,9 +155,11 @@ if "demo_products" not in st.session_state:
 
 if "demo_sales" not in st.session_state:
     st.session_state.demo_sales = pd.DataFrame([
-        {"id": 1, "product_name": "ساندوتش كفتة", "quantity": 2, "unit_price": 35.0, "total_price": 70.0, "profit": 20.0, "buyer_name": "طالب عام", "created_at": "2026-10-05 10:00"},
-        {"id": 2, "product_name": "عصير فريش", "quantity": 1, "unit_price": 20.0, "total_price": 20.0, "profit": 8.0, "buyer_name": "طالب عام", "created_at": "2026-10-05 10:15"}
+        {"id": 1, "student_name": "ma", "student_class": "10-a", "items_str": "باكت بطاطس (15 ج.م)، باكت بطاطس (15 ج.م)", "total_price": 30.0, "paid_amount": 50.0, "profit": 10.0, "status": "قيد الانتظار ⏳", "created_at": "08:04 PM"}
     ])
+
+if "cart_items" not in st.session_state:
+    st.session_state.cart_items = []
 
 if "system_locked" not in st.session_state:
     st.session_state.system_locked = False
@@ -286,78 +306,132 @@ if check_system_lock() and user_role not in ["master"]:
 # Main Navigation Tabs Layout
 # ---------------------------------------------------------
 if user_role in ["master", "admin"]:
-    tabs = st.tabs(["تسجيل طلب جديد 🛒", "إدارة المنتجات ⚙️", "المبيعات والتقارير 📊"])
-    tab_sales, tab_products, tab_reports = tabs[0], tabs[1], tabs[2]
+    tabs = st.tabs(["تسجيل طلب جديد 🛒", "الأوردرات 👨‍🍳", "إدارة المنتجات ⚙️", "المبيعات والتقارير 📊"])
+    tab_sales, tab_orders, tab_products, tab_reports = tabs[0], tabs[1], tabs[2], tabs[3]
 elif user_role == "canteen":
-    tabs = st.tabs(["تسجيل طلب جديد 🛒", "إدارة المنتجات ⚙️"])
-    tab_sales, tab_products = tabs[0], tabs[1]
-    tab_reports = None
+    tabs = st.tabs(["الأوردرات 👨‍🍳", "إدارة المنتجات ⚙️"])
+    tab_orders, tab_products = tabs[0], tabs[1]
+    tab_sales, tab_reports = None, None
 else:  # Student / Guest
-    tabs = st.tabs(["قائمة الطلبات المتاحة 🛒"])
+    tabs = st.tabs(["تسجيل طلب جديد 🛒"])
     tab_sales = tabs[0]
-    tab_products, tab_reports = None, None
+    tab_orders, tab_products, tab_reports = None, None, None
 
-# --- TAB 1: SALES & POS ---
-with tab_sales:
-    st.subheader("🛒 تسجيل طلب جديد")
-    prods = get_products()
-    
-    if prods.empty or "stock" not in prods.columns:
-        st.info("لا توجد منتجات مسجلة حالياً.")
-    else:
-        avail_prods = prods[prods["stock"] > 0]
-        if avail_prods.empty:
-            st.warning("جميع المنتجات نفدت من المخزن حالياً!")
+# --- TAB: STUDENT NEW ORDER (شاشة الطلب للطلاب) ---
+if tab_sales is not None:
+    with tab_sales:
+        st.subheader("🛒 قائمة الطلبات المتاحة")
+        
+        col_s1, col_s2 = st.columns(2)
+        with col_s1:
+            student_name = st.text_input("اسم الطالب:", key="std_name_input")
+        with col_s2:
+            student_class = st.text_input("الفصل الدراسي:", key="std_class_input")
+            
+        prods = get_products()
+        if prods.empty or "stock" not in prods.columns:
+            st.info("لا توجد منتجات مسجلة حالياً.")
         else:
-            categories = avail_prods["category"].unique() if "category" in avail_prods.columns else ["عام"]
+            avail_prods = prods[prods["stock"] > 0]
+            st.markdown("---")
             
-            for cat in categories:
-                st.markdown(f"#### 🥪 {cat}")
-                cat_items = avail_prods[avail_prods["category"] == cat] if "category" in avail_prods.columns else avail_prods
-                
-                cols = st.columns(len(cat_items) if len(cat_items) <= 4 else 4)
-                for idx, (_, item) in enumerate(cat_items.iterrows()):
-                    with cols[idx % 4]:
-                        st.checkbox(
-                            f"{item['name']} - {item['selling_price']} ج.م (المتاح: {item['stock']})",
-                            key=f"item_{item['name']}"
-                        )
+            # Display items list with Add buttons (Matching Image 2)
+            for idx, item in avail_prods.iterrows():
+                col_i1, col_i2, col_i3 = st.columns([3, 2, 1])
+                with col_i1:
+                    st.markdown(f"**{item['name']}**")
+                with col_i2:
+                    st.markdown(f"🏷️ **{item['selling_price']} ج.م**")
+                with col_i3:
+                    if st.button("إضافة ➕", key=f"add_{item['name']}_{idx}", use_container_width=True):
+                        st.session_state.cart_items.append(item.to_dict())
+                        st.rerun()
             
-            st.divider()
-            col_sel, col_qty = st.columns(2)
-            with col_sel:
-                selected_prod = st.selectbox("اختر المنتج لتأكيد الطلب:", avail_prods["name"].tolist())
-            with col_qty:
-                sel_row = avail_prods[avail_prods["name"] == selected_prod].iloc[0]
-                qty = st.number_input("الكمية المطلوبة:", min_value=1, max_value=int(sel_row["stock"]), value=1)
-                
-            tot_price = float(sel_row["selling_price"]) * qty
-            profit_val = (float(sel_row["selling_price"]) - float(sel_row["cost_price"])) * qty
+            st.markdown("---")
+            st.subheader("🛒 سلة الطلبات الحالية")
             
-            st.metric("الإجمالي الحسابي:", f"{tot_price:.2f} ج.م")
+            if not st.session_state.cart_items:
+                st.info("السلة فارغة حالياً. قم بإضافة أصناف من الأعلى.")
+            else:
+                total_sum = 0.0
+                for item in st.session_state.cart_items:
+                    st.markdown(f"• **{item['name']}** ({item['selling_price']} ج.م)")
+                    total_sum += float(item['selling_price'])
+                
+                st.markdown(f"### **الإجمالي: <span style='color:#00ff66;'>{total_sum:.0f} ج.م</span>**", unsafe_allow_html=True)
+                
+                paid_amount = st.number_input("المبلغ المدفوع (معاك كام؟):", min_value=0.0, step=5.0, value=total_sum)
+                
+                col_btn_del1, col_btn_del2 = st.columns(2)
+                with col_btn_del1:
+                    if st.button("حذف ➖ (آخر منتج)", use_container_width=True):
+                        if st.session_state.cart_items:
+                            st.session_state.cart_items.pop()
+                            st.rerun()
+                with col_btn_del2:
+                    if st.button("حذف السلة 🗑️", use_container_width=True):
+                        st.session_state.cart_items = []
+                        st.rerun()
+                
+                if st.button("🚀 اطلب من الكانتين", type="primary", use_container_width=True):
+                    if not student_name or not student_class:
+                        st.error("❌ يرجى كتابة اسم الطالب والفصل الدراسي أولاً!")
+                    elif paid_amount < total_sum:
+                        st.error(f"❌ المبلغ المدفوع ({paid_amount} ج.م) أقل من إجمالي الطلب ({total_sum} ج.م)!")
+                    else:
+                        items_str = ", ".join([f"{i['name']} ({i['selling_price']} ج.م)" for i in st.session_state.cart_items])
+                        sale_record = {
+                            "student_name": student_name,
+                            "student_class": student_class,
+                            "items_str": items_str,
+                            "total_price": total_sum,
+                            "paid_amount": paid_amount,
+                            "profit": total_sum * 0.2, # تقدير ربح
+                            "status": "قيد الانتظار ⏳",
+                            "created_at": datetime.now().strftime("%I:%M %p")
+                        }
+                        
+                        db_insert("sales", sale_record)
+                        st.session_state.demo_sales = pd.concat([st.session_state.demo_sales, pd.DataFrame([sale_record])], ignore_index=True)
+                        
+                        # Clear cart and play bell
+                        st.session_state.cart_items = []
+                        st.session_state.play_bell = True
+                        st.success("🔔 تم إرسال طلبك للكانتين بنجاح!")
+                        st.rerun()
+
+# --- TAB: KITCHEN / CANTEEN ORDERS (شاشة المطبخ والطلبات - Matching Image 1) ---
+if tab_orders is not None:
+    with tab_orders:
+        st.subheader("👨‍🍳 شاشة المطبخ والطلبات")
+        sales_df = get_sales()
+        
+        if sales_df.empty:
+            st.info("لا توجد طلبات جديدة حالياً.")
+        else:
+            active_orders = sales_df[sales_df.get("status", "قيد الانتظار ⏳") == "قيد الانتظار ⏳"] if "status" in sales_df.columns else sales_df
             
-            if st.button("🔔✅ تأكيد وتنفيذ الطلب (مع إرسال جرس تنبيه)", type="primary", use_container_width=True):
-                new_stk = int(sel_row["stock"]) - qty
-                db_update("products", "name", selected_prod, {"stock": new_stk})
-                st.session_state.demo_products.loc[st.session_state.demo_products["name"] == selected_prod, "stock"] = new_stk
-                
-                sale_record = {
-                    "product_name": selected_prod,
-                    "quantity": qty,
-                    "unit_price": float(sel_row["selling_price"]),
-                    "total_price": tot_price,
-                    "profit": profit_val,
-                    "buyer_name": "طالب",
-                    "created_at": datetime.now().strftime("%Y-%m-%d %H:%M")
-                }
-                db_insert("sales", sale_record)
-                st.session_state.demo_sales = pd.concat([st.session_state.demo_sales, pd.DataFrame([sale_record])], ignore_index=True)
-                
-                # Activate Audio Bell Alert
-                st.session_state.play_bell = True
-                
-                st.success("🔔 تم تسجيل الطلب وإرسال التنبيه بصوت الجرس إلى الكانتين بنجاح!")
-                st.rerun()
+            if active_orders.empty:
+                st.success("✨ جميع الطلبات تم تقديمها بنجاح!")
+            else:
+                for idx, row in active_orders.iterrows():
+                    st.markdown(f"""
+                    <div class="order-card">
+                        <h3>طلب: {row.get('student_name', 'طالب')} ({row.get('student_class', 'عام')})</h3>
+                        <p><b>الأصناف:</b> {row.get('items_str', 'منتجات متنوعة')}</p>
+                        <p><b>الحساب:</b> {row.get('total_price', 0)} ج.م | <b>المدفوع:</b> {row.get('paid_amount', 0)} ج.م</p>
+                        <div class="change-box">
+                            🟡 الباقي للطالب: {float(row.get('paid_amount', 0)) - float(row.get('total_price', 0)):.0f} ج.م
+                        </div>
+                        <p>⏰ <b>الوقت:</b> {row.get('created_at', '')}</p>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    
+                    if st.button(f"✅ إتمام تقديم الطلب #{idx+1}", key=f"complete_{idx}", type="primary"):
+                        if "status" in st.session_state.demo_sales.columns:
+                            st.session_state.demo_sales.at[idx, "status"] = "تم التقديم ✅"
+                        st.success("تم إتمام الطلب!")
+                        st.rerun()
 
 # --- TAB 2: PRODUCTS MANAGEMENT ---
 if tab_products is not None:
@@ -406,8 +480,9 @@ if tab_reports is not None:
             m3.metric("عدد العمليات", f"{len(sales_df)}")
             
             st.divider()
-            fig = px.bar(sales_df, x="product_name", y="total_price", color="product_name", title="📈 توزيع المبيعات حسب المنتج")
-            st.plotly_chart(fig, use_container_width=True)
+            if "product_name" in sales_df.columns:
+                fig = px.bar(sales_df, x="product_name", y="total_price", color="product_name", title="📈 توزيع المبيعات حسب المنتج")
+                st.plotly_chart(fig, use_container_width=True)
             
             st.subheader("📜 سجل العمليات التفصيلي")
             st.dataframe(sales_df, use_container_width=True)
