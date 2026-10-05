@@ -324,9 +324,9 @@ if tab_sales is not None:
         
         col_s1, col_s2 = st.columns(2)
         with col_s1:
-            student_name = st.text_input("اسم الطالب:", key="std_name_input")
+            student_name = st.text_input("اسم الطالب: (مثال: محمود مصطفى)", placeholder="محمود مصطفى", key="std_name_input")
         with col_s2:
-            student_class = st.text_input("الفصل الدراسي:", key="std_class_input")
+            student_class = st.text_input("الفصل الدراسي: (مثال: 10-A)", placeholder="10-A", key="std_class_input")
             
         prods = get_products()
         if prods.empty or "stock" not in prods.columns:
@@ -335,7 +335,7 @@ if tab_sales is not None:
             avail_prods = prods[prods["stock"] > 0]
             st.markdown("---")
             
-            # Display items list with Add buttons (Matching Image 2)
+            # Display items list with Add buttons
             for idx, item in avail_prods.iterrows():
                 col_i1, col_i2, col_i3 = st.columns([3, 2, 1])
                 with col_i1:
@@ -400,7 +400,7 @@ if tab_sales is not None:
                         st.success("🔔 تم إرسال طلبك للكانتين بنجاح!")
                         st.rerun()
 
-# --- TAB: KITCHEN / CANTEEN ORDERS (شاشة المطبخ والطلبات - Matching Image 1) ---
+# --- TAB: KITCHEN / CANTEEN ORDERS (شاشة المطبخ والطلبات) ---
 if tab_orders is not None:
     with tab_orders:
         st.subheader("👨‍🍳 شاشة المطبخ والطلبات")
