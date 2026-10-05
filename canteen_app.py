@@ -3,6 +3,7 @@ import pandas as pd
 import requests
 import plotly.express as px
 from datetime import datetime
+import extra_streamlit_components as stx
 
 # ---------------------------------------------------------
 # Page Configuration
@@ -12,6 +13,79 @@ st.set_page_config(
     page_icon="🍔",
     layout="wide"
 )
+
+# ---------------------------------------------------------
+# Custom CSS for Video-Matched UI & Custom Tabs Layout
+# ---------------------------------------------------------
+st.markdown("""
+<style>
+    /* Direction and Font */
+    html, body, [class*="css"] {
+        direction: rtl;
+        text-align: right;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+
+    /* Top Master Header Banner */
+    .sovereign-header {
+        background: linear-gradient(90deg, #30004a 0%, #1a002c 100%);
+        color: #ffd700;
+        padding: 15px 25px;
+        border-radius: 12px;
+        border: 2px solid #6b11b0;
+        box-shadow: 0px 4px 15px rgba(107, 17, 176, 0.4);
+        margin-bottom: 20px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    /* Custom Styling for Streamlit Tabs (Matching Video Bar) */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 8px;
+        background-color: #0e1117;
+        padding: 8px;
+        border-radius: 10px;
+        border: 1px solid #262730;
+    }
+
+    .stTabs [data-baseweb="tab"] {
+        height: 45px;
+        white-space: pre-wrap;
+        background-color: #1e222d;
+        border-radius: 8px;
+        color: #ffffff;
+        font-weight: bold;
+        padding: 0px 20px;
+        border: 1px solid #363b4e;
+    }
+
+    .stTabs [aria-selected="true"] {
+        background-color: #ff4b4b !important;
+        color: #ffffff !important;
+        border: 1px solid #ff2b2b !important;
+        box-shadow: 0px 2px 10px rgba(255, 75, 75, 0.4);
+    }
+
+    /* Kill Switch Button Style */
+    .stButton>button[kind="primary"] {
+        border-radius: 8px;
+        font-weight: bold;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+# Cookie Manager Initialization
+cookie_manager = stx.CookieManager()
+
+# Audio Bell Function for New Orders
+def trigger_notification_bell():
+    bell_html = """
+    <audio autoplay style="display:none;">
+        <source src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3" type="audio/mpeg">
+    </audio>
+    """
+    st.components.v1.html(bell_html, height=0)
 
 # ---------------------------------------------------------
 # Supabase REST API Configuration
@@ -70,6 +144,9 @@ if "demo_sales" not in st.session_state:
 if "system_locked" not in st.session_state:
     st.session_state.system_locked = False
 
+if "play_bell" not in st.session_state:
+    st.session_state.play_bell = False
+
 # Helper Functions
 def get_products():
     df = db_get("products")
@@ -110,8 +187,21 @@ GUEST_DEMO_ACCOUNT = {
     "name": "زائر الديمو التجريبي 🎓"
 }
 
+# Persistent Auto-Login via Cookies
+saved_user = cookie_manager.get("auth_user")
+
 if "current_user" not in st.session_state:
-    st.session_state.current_user = None
+    if saved_user in ACCOUNTS:
+        st.session_state.current_user = ACCOUNTS[saved_user]
+    elif saved_user == "guest":
+        st.session_state.current_user = GUEST_DEMO_ACCOUNT
+    else:
+        st.session_state.current_user = None
+
+# Trigger sound bell when a new order is received
+if st.session_state.play_bell:
+    trigger_notification_bell()
+    st.session_state.play_bell = False
 
 # ---------------------------------------------------------
 # 1. Login Screen
@@ -124,34 +214,40 @@ if st.session_state.current_user is None:
     with col_b:
         u_name = st.text_input("اسم المستخدم (Username):")
         u_pass = st.text_input("كلمة المرور (Password):", type="password")
+        remember_me = st.checkbox("تذكرني على هذا الجهاز 💾", value=True)
         
         col_btn1, col_btn2 = st.columns(2)
         with col_btn1:
             if st.button("🔑 تسجيل الدخول", type="primary", use_container_width=True):
                 if u_name in ACCOUNTS and ACCOUNTS[u_name]["pass"] == u_pass:
                     st.session_state.current_user = ACCOUNTS[u_name]
+                    if remember_me:
+                        cookie_manager.set("auth_user", u_name, key="set_user_cookie")
                     st.rerun()
                 else:
                     st.error("❌ اسم المستخدم أو كلمة المرور غير صحيحة!")
         with col_btn2:
             if st.button("🚀 دخول سريع بنظام الديمو (Guest Demo)", use_container_width=True):
                 st.session_state.current_user = GUEST_DEMO_ACCOUNT
+                if remember_me:
+                    cookie_manager.set("auth_user", "guest", key="set_guest_cookie")
                 st.rerun()
                 
     st.stop()
 
 # ---------------------------------------------------------
-# Header & Master Control Dashboard Info
+# Header & Master Dashboard Info
 # ---------------------------------------------------------
 user = st.session_state.current_user
 user_role = user["role"]
 
 col_header, col_logout = st.columns([5, 1])
 with col_header:
-    st.markdown(f"## {user['name']}")
+    st.markdown(f"<div class='sovereign-header'><h3>{user['name']}</h3></div>", unsafe_allow_html=True)
 with col_logout:
     if st.button("تسجيل الخروج 🚪", use_container_width=True):
         st.session_state.current_user = None
+        cookie_manager.delete("auth_user", key="delete_user_cookie")
         st.rerun()
 
 # --- Master / Admin Control Panel ---
@@ -187,7 +283,7 @@ if check_system_lock() and user_role not in ["master", "admin"]:
     st.stop()
 
 # ---------------------------------------------------------
-# Main Navigation Tabs Layout (Matching Video)
+# Main Navigation Tabs Layout
 # ---------------------------------------------------------
 if user_role in ["master", "admin"]:
     tabs = st.tabs(["تسجيل طلب جديد 🛒", "إدارة المنتجات ⚙️", "المبيعات والتقارير 📊"])
@@ -213,7 +309,6 @@ with tab_sales:
         if avail_prods.empty:
             st.warning("جميع المنتجات نفدت من المخزن حالياً!")
         else:
-            # Display products visually grouped
             categories = avail_prods["category"].unique() if "category" in avail_prods.columns else ["عام"]
             
             for cat in categories:
@@ -241,7 +336,7 @@ with tab_sales:
             
             st.metric("الإجمالي الحسابي:", f"{tot_price:.2f} ج.م")
             
-            if st.button("✅ تأكيد وتنفيذ الطلب", type="primary", use_container_width=True):
+            if st.button("🔔✅ تأكيد وتنفيذ الطلب (مع إرسال جرس تنبيه)", type="primary", use_container_width=True):
                 new_stk = int(sel_row["stock"]) - qty
                 db_update("products", "name", selected_prod, {"stock": new_stk})
                 st.session_state.demo_products.loc[st.session_state.demo_products["name"] == selected_prod, "stock"] = new_stk
@@ -258,13 +353,16 @@ with tab_sales:
                 db_insert("sales", sale_record)
                 st.session_state.demo_sales = pd.concat([st.session_state.demo_sales, pd.DataFrame([sale_record])], ignore_index=True)
                 
-                st.success("تم تسجيل الطلب وخصمه من المخزون بنجاح!")
+                # Activate Audio Bell Alert
+                st.session_state.play_bell = True
+                
+                st.success("🔔 تم تسجيل الطلب وإرسال التنبيه بصوت الجرس إلى الكانتين بنجاح!")
                 st.rerun()
 
 # --- TAB 2: PRODUCTS MANAGEMENT ---
 if tab_products is not None:
     with tab_products:
-        st.subheader("⚙️ إضافة منتج جديد للمنيو")
+        st.subheader("⚙️️ إضافة منتج جديد للمنيو")
         with st.form("add_product_form"):
             col_p1, col_p2 = st.columns(2)
             with col_p1:
