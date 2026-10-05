@@ -15,7 +15,7 @@ st.set_page_config(
 )
 
 # ---------------------------------------------------------
-# Custom CSS for Video-Matched UI & Custom Tabs Layout
+# Custom CSS for Video-Matched UI, Animations & Dynamic Theme
 # ---------------------------------------------------------
 st.markdown("""
 <style>
@@ -26,69 +26,120 @@ st.markdown("""
         font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     }
 
-    /* Top Master Header Banner */
+    /* Keyframe Animations */
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(12px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes pulseGlow {
+        0% { box-shadow: 0 0 10px rgba(107, 17, 176, 0.4); }
+        50% { box-shadow: 0 0 22px rgba(168, 85, 247, 0.8); }
+        100% { box-shadow: 0 0 10px rgba(107, 17, 176, 0.4); }
+    }
+
+    /* Global Fade-in Effect for Main Content */
+    .stAppViewContainer {
+        animation: fadeIn 0.6s ease-out;
+    }
+
+    /* Top Master Header Banner with Animated Glow & Glassmorphism */
     .sovereign-header {
-        background: linear-gradient(90deg, #30004a 0%, #1a002c 100%);
-        color: #ffd700;
-        padding: 15px 25px;
-        border-radius: 12px;
-        border: 2px solid #6b11b0;
-        box-shadow: 0px 4px 15px rgba(107, 17, 176, 0.4);
-        margin-bottom: 20px;
+        background: linear-gradient(135deg, #2b004a 0%, #150027 50%, #3b0764 100%);
+        color: #facc15;
+        padding: 18px 28px;
+        border-radius: 16px;
+        border: 2px solid #9333ea;
+        animation: pulseGlow 3s infinite alternate;
+        margin-bottom: 22px;
         display: flex;
         justify-content: space-between;
         align-items: center;
+        backdrop-filter: blur(10px);
     }
 
-    /* Custom Styling for Streamlit Tabs */
+    /* Modern Styled Tabs */
     .stTabs [data-baseweb="tab-list"] {
-        gap: 8px;
-        background-color: #0e1117;
-        padding: 8px;
-        border-radius: 10px;
-        border: 1px solid #262730;
+        gap: 10px;
+        background-color: #0f172a;
+        padding: 10px;
+        border-radius: 14px;
+        border: 1px solid #1e293b;
     }
 
     .stTabs [data-baseweb="tab"] {
-        height: 45px;
+        height: 48px;
         white-space: pre-wrap;
-        background-color: #1e222d;
-        border-radius: 8px;
-        color: #ffffff;
+        background-color: #1e293b;
+        border-radius: 10px;
+        color: #cbd5e1;
         font-weight: bold;
-        padding: 0px 20px;
-        border: 1px solid #363b4e;
+        padding: 0px 22px;
+        border: 1px solid #334155;
+        transition: all 0.3s ease-in-out;
+    }
+
+    .stTabs [data-baseweb="tab"]:hover {
+        background-color: #334155;
+        color: #ffffff;
+        transform: translateY(-2px);
     }
 
     .stTabs [aria-selected="true"] {
-        background-color: #ff4b4b !important;
+        background: linear-gradient(90deg, #ef4444 0%, #dc2626 100%) !important;
         color: #ffffff !important;
-        border: 1px solid #ff2b2b !important;
-        box-shadow: 0px 2px 10px rgba(255, 75, 75, 0.4);
+        border: 1px solid #f87171 !important;
+        box-shadow: 0px 4px 15px rgba(239, 68, 68, 0.5);
     }
 
-    /* Order Card Style matching Image 1 */
+    /* Order Card Styling with Hover Lift */
     .order-card {
-        border: 2px solid #363b4e;
-        border-radius: 12px;
-        padding: 15px;
-        background-color: #161922;
-        margin-bottom: 15px;
+        border: 2px solid #334155;
+        border-radius: 16px;
+        padding: 18px;
+        background: linear-gradient(145deg, #1e293b, #0f172a);
+        margin-bottom: 18px;
+        box-shadow: 0px 4px 12px rgba(0,0,0,0.3);
+        transition: transform 0.2s ease, border-color 0.2s ease;
     }
 
+    .order-card:hover {
+        transform: translateY(-4px);
+        border-color: #a855f7;
+    }
+
+    /* Animated Change Display Box */
     .change-box {
-        background-color: #2e7d32;
+        background: linear-gradient(90deg, #15803d 0%, #166534 100%);
         color: #ffffff;
-        padding: 10px;
-        border-radius: 8px;
+        padding: 12px;
+        border-radius: 10px;
         font-weight: bold;
         text-align: center;
-        margin: 10px 0;
+        margin: 12px 0;
+        box-shadow: 0px 2px 8px rgba(22, 101, 52, 0.4);
+    }
+
+    /* Smooth Hover Effects on Buttons */
+    .stButton>button {
+        border-radius: 10px !important;
+        font-weight: bold !important;
+        transition: all 0.25s ease-in-out !important;
+    }
+
+    .stButton>button:hover {
+        transform: scale(1.02);
+        box-shadow: 0px 4px 14px rgba(255, 255, 255, 0.15);
     }
 
     .stButton>button[kind="primary"] {
-        border-radius: 8px;
-        font-weight: bold;
+        background: linear-gradient(90deg, #2563eb 0%, #1d4ed8 100%) !important;
+        border: none !important;
+    }
+
+    .stButton>button[kind="primary"]:hover {
+        background: linear-gradient(90deg, #3b82f6 0%, #2563eb 100%) !important;
+        box-shadow: 0px 4px 18px rgba(37, 99, 235, 0.5) !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -309,7 +360,7 @@ if user_role in ["master", "admin"]:
     tabs = st.tabs(["تسجيل طلب جديد 🛒", "الأوردرات 👨‍🍳", "إدارة المنتجات ⚙️", "المبيعات والتقارير 📊"])
     tab_sales, tab_orders, tab_products, tab_reports = tabs[0], tabs[1], tabs[2], tabs[3]
 elif user_role == "canteen":
-    tabs = st.tabs(["الأوردرات 👨‍🍳", "إدارة المنتجات ⚙️"])
+    tabs = st.tabs(["الأوردرات 👨‍🍳", "إدارة المنتجات ⚙️️"])
     tab_orders, tab_products = tabs[0], tabs[1]
     tab_sales, tab_reports = None, None
 else:  # Student / Guest
