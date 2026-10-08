@@ -38,12 +38,10 @@ st.markdown("""
         100% { box-shadow: 0 0 10px rgba(107, 17, 176, 0.4); }
     }
 
-    /* Global Fade-in Effect for Main Content */
     .stAppViewContainer {
         animation: fadeIn 0.6s ease-out;
     }
 
-    /* Top Master Header Banner with Animated Glow & Glassmorphism */
     .sovereign-header {
         background: linear-gradient(135deg, #2b004a 0%, #150027 50%, #3b0764 100%);
         color: #facc15;
@@ -58,7 +56,6 @@ st.markdown("""
         backdrop-filter: blur(10px);
     }
 
-    /* Modern Styled Tabs */
     .stTabs [data-baseweb="tab-list"] {
         gap: 10px;
         background-color: #0f172a;
@@ -92,7 +89,6 @@ st.markdown("""
         box-shadow: 0px 4px 15px rgba(239, 68, 68, 0.5);
     }
 
-    /* Order Card Styling with Hover Lift */
     .order-card {
         border: 2px solid #334155;
         border-radius: 16px;
@@ -108,7 +104,6 @@ st.markdown("""
         border-color: #a855f7;
     }
 
-    /* Animated Change Display Box */
     .change-box {
         background: linear-gradient(90deg, #15803d 0%, #166534 100%);
         color: #ffffff;
@@ -120,7 +115,6 @@ st.markdown("""
         box-shadow: 0px 2px 8px rgba(22, 101, 52, 0.4);
     }
 
-    /* Smooth Hover Effects on Buttons */
     .stButton>button {
         border-radius: 10px !important;
         font-weight: bold !important;
@@ -156,23 +150,23 @@ def trigger_notification_bell():
     """
     st.components.v1.html(bell_html, height=0)
 
-# ⏰ دالة التحقق من مواعيد وأيام عمل الكانتين للطلاب
-def is_canteen_open_for_students():
+# ⏰ دالة فحص المواعيد وأيام عمل الكانتين للطلاب والزوار
+def check_canteen_working_hours():
     now = datetime.now()
     
-    # التحقق من الأيام (الجمعة = 4، السبت = 5)
+    # 1. التحقق من أيام العطلة (الجمعة = 4، السبت = 5)
     if now.weekday() in [4, 5]:
-        return False, "الكانتين مغلق اليوم للطلاب (عطلة نهاية الأسبوع: الجمعة والسبت) 🔴"
+        return False, "الكانتين مغلق اليوم (عطلة نهاية الأسبوع: الجمعة والسبت) 🔴"
     
-    # التحقق من الوقت (من 8:00 صباحاً حتى 2:15 ظهراً)
+    # 2. التحقق من الوقت (من 8:00 صباحاً حتى 2:15 ظهراً)
     start_time = time(8, 0)
     end_time = time(14, 15)
     current_time = now.time()
     
     if not (start_time <= current_time <= end_time):
-        return False, "الكانتين مغلق للطلاب حالياً 🔴 (مواعيد الطلب الرسمية من 8:00 صباحاً حتى 2:15 ظهراً)"
+        return False, f"الكانتين مغلق حالياً 🔴\nالوقت الحالي: {now.strftime('%I:%M %p')}\nمواعيد الطلب الرسمية للطلاب والزوار من 8:00 صباحاً حتى 2:15 ظهراً."
         
-    return True, "الكانتين مفتوح للطلاب 🟢"
+    return True, "الكانتين مفتوح للطلب 🟢"
 
 # ---------------------------------------------------------
 # Supabase REST API Configuration
@@ -287,7 +281,6 @@ if "current_user" not in st.session_state:
     else:
         st.session_state.current_user = None
 
-# Trigger sound bell when a new order is received
 if st.session_state.play_bell:
     trigger_notification_bell()
     st.session_state.play_bell = False
@@ -339,7 +332,7 @@ with col_logout:
         cookie_manager.delete("auth_user", key="delete_user_cookie")
         st.rerun()
 
-# --- Master Control Panel (خصيصاً لـ MASTER OODY فقط) ---
+# --- Master Control Panel (خصيصاً لـ MASTER OODY) ---
 if user_role == "master":
     st.markdown("### ⚡ لوحة التحكم المطلقة (Master Control)")
     c_status, c_switch = st.columns([2, 2])
@@ -365,19 +358,19 @@ if user_role == "master":
 st.divider()
 st.title("🍔 Bright Vision - نظام الكانتين الذكي")
 
-# Enforce Emergency System Lock
+# 🔴 1. فحص القفل الطارئ المباشر للنظام
 if check_system_lock() and user_role not in ["master"]:
     st.error("🔒 النظام مغلق حالياً بقرار من إدارة المدرسة.")
     st.warning("الرجاء التواصل مع الإدارة لإعادة التفعيل.")
     st.stop()
 
-# ⏰ تطبيق القفل الزمني على الطلاب والزوار فقط (يُستثنى master, admin, canteen)
+# 🔴 2. القفل الفوري والمباشر لحسابات الطلاب والزوار خارج المواعيد
 if user_role == "student":
-    open_status, open_msg = is_canteen_open_for_students()
-    if not open_status:
+    is_open, open_msg = check_canteen_working_hours()
+    if not is_open:
         st.error(f"🔒 {open_msg}")
-        st.info("💡 يمكنك استخدام حساب الطالب للطلب خلال مواعيد العمل الرسمية فقط (من 8:00 ص إلى 2:15 ظ، من الأحد للخميس).")
-        st.stop()
+        st.info("💡 يمكن للطلاب والزوار تقديم الطلبات فقط خلال مواعيد العمل الرسمية (من 8:00 صباحاً حتى 2:15 ظهراً - من الأحد إلى الخميس).")
+        st.stop() # 🛑 يمنع الكود تماماً من إظهار أي أزرار أو قائمة منتجات
 
 # ---------------------------------------------------------
 # Main Navigation Tabs Layout
@@ -389,7 +382,7 @@ elif user_role == "canteen":
     tabs = st.tabs(["الأوردرات 👨‍🍳", "إدارة المنتجات ⚙"])
     tab_orders, tab_products = tabs[0], tabs[1]
     tab_sales, tab_reports = None, None
-else:  # Student / Guest
+else:  # Student / Guest (مسموح بالدخول هنا فقط لو المواعيد مضبوطة)
     tabs = st.tabs(["تسجيل طلب جديد 🛒"])
     tab_sales = tabs[0]
     tab_orders, tab_products, tab_reports = None, None, None
@@ -412,7 +405,6 @@ if tab_sales is not None:
             avail_prods = prods[prods["stock"] > 0]
             st.markdown("---")
             
-            # Display items list with Add buttons
             for idx, item in avail_prods.iterrows():
                 col_i1, col_i2, col_i3 = st.columns([3, 2, 1])
                 with col_i1:
@@ -463,7 +455,7 @@ if tab_sales is not None:
                             "items_str": items_str,
                             "total_price": total_sum,
                             "paid_amount": paid_amount,
-                            "profit": total_sum * 0.2, # تقدير ربح
+                            "profit": total_sum * 0.2,
                             "status": "قيد الانتظار ⏳",
                             "created_at": datetime.now().strftime("%I:%M %p")
                         }
@@ -471,7 +463,6 @@ if tab_sales is not None:
                         db_insert("sales", sale_record)
                         st.session_state.demo_sales = pd.concat([st.session_state.demo_sales, pd.DataFrame([sale_record])], ignore_index=True)
                         
-                        # Clear cart and play bell
                         st.session_state.cart_items = []
                         st.session_state.play_bell = True
                         st.success("🔔 تم إرسال طلبك للكانتين بنجاح!")
@@ -547,7 +538,6 @@ if tab_reports is not None:
     with tab_reports:
         st.subheader("📊 إحصائيات وتقارير المبيعات المحفوظة")
         
-        # 👑 زرار إعادة ضبط وتصفير الإحصائيات (خاص بـ master و admin)
         if user_role in ["master", "admin"]:
             with st.expander("⚠️ منطقة التحكم الإداري (إعادة ضبط الإحصائيات)"):
                 st.warning("تنبيه: مسح الإحصائيات سيقوم بتصفير كافة المبيعات والتقارير الحالية!")
