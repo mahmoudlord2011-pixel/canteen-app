@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import requests
 import plotly.express as px
-from datetime import datetime
+from datetime import datetime, time
 import extra_streamlit_components as stx
 
 # ---------------------------------------------------------
@@ -155,6 +155,24 @@ def trigger_notification_bell():
     </audio>
     """
     st.components.v1.html(bell_html, height=0)
+
+# ⏰ [ميزة جديدة 1]: دالة التحقق من مواعيد وأيام العمل الرسمية
+def is_canteen_open():
+    now = datetime.now()
+    
+    # التحقق من الأيام (الجمعة = 4، السبت = 5)
+    if now.weekday() in [4, 5]:
+        return False, "الكانتين مغلق اليوم (عطلة نهاية الأسبوع: الجمعة والسبت) 🔴"
+    
+    # التحقق من الوقت (من 8:00 صباحاً حتى 2:15 ظهراً)
+    start_time = time(8, 0)
+    end_time = time(14, 15)
+    current_time = now.time()
+    
+    if not (start_time <= current_time <= end_time):
+        return False, "الكانتين مغلق حالياً 🔴 (مواعيد العمل الرسمية من 8:00 صباحاً حتى 2:15 ظهراً)"
+        
+    return True, "الكانتين مفتوح 🟢"
 
 # ---------------------------------------------------------
 # Supabase REST API Configuration
@@ -353,6 +371,13 @@ if check_system_lock() and user_role not in ["master"]:
     st.warning("الرجاء التواصل مع الإدارة لإعادة التفعيل.")
     st.stop()
 
+# ⏰ [ميزة جديدة 1]: تطبيق شرط المواعيد والأيام (استثناء حسابك oody وحساب الأدمن)
+open_status, open_msg = is_canteen_open()
+if not open_status and user_role not in ["master", "admin"]:
+    st.error(f"🔒 {open_msg}")
+    st.info("💡 يمكن للطلاب والزوار استخدام الكانتين خلال مواعيد العمل الرسمية فقط.")
+    st.stop()
+
 # ---------------------------------------------------------
 # Main Navigation Tabs Layout
 # ---------------------------------------------------------
@@ -360,7 +385,7 @@ if user_role in ["master", "admin"]:
     tabs = st.tabs(["تسجيل طلب جديد 🛒", "الأوردرات 👨‍🍳", "إدارة المنتجات ⚙️", "المبيعات والتقارير 📊"])
     tab_sales, tab_orders, tab_products, tab_reports = tabs[0], tabs[1], tabs[2], tabs[3]
 elif user_role == "canteen":
-    tabs = st.tabs(["الأوردرات 👨‍🍳", "إدارة المنتجات ⚙️️"])
+    tabs = st.tabs(["الأوردرات 👨‍🍳", "إدارة المنتجات ⚙"])
     tab_orders, tab_products = tabs[0], tabs[1]
     tab_sales, tab_reports = None, None
 else:  # Student / Guest
@@ -520,6 +545,24 @@ if tab_products is not None:
 if tab_reports is not None:
     with tab_reports:
         st.subheader("📊 إحصائيات وتقارير المبيعات المحفوظة")
+        
+        # 👑 [ميزة جديدة 2]: زرار إعادة ضبط وتصفير الإحصائيات (خاص بـ master و admin)
+        if user_role in ["master", "admin"]:
+            with st.expander("⚠️ منطقة التحكم الإداري (إعادة ضبط الإحصائيات)"):
+                st.warning("تنبيه: مسح الإحصائيات سيقوم بتصفير كافة المبيعات والتقارير الحالية!")
+                if st.button("🔄 إعادة ضبط وتصفير جميع الإحصائيات", type="primary", use_container_width=True):
+                    st.session_state.demo_sales = pd.DataFrame(columns=[
+                        "id", "student_name", "student_class", "items_str", 
+                        "total_price", "paid_amount", "profit", "status", "created_at"
+                    ])
+                    try:
+                        requests.delete(f"{SUPABASE_URL}/rest/v1/sales?id=gt.0", headers=HEADERS)
+                    except Exception:
+                        pass
+                    st.success("✅ تم إعادة ضبط وتصفير جميع الإحصائيات بنجاح!")
+                    st.rerun()
+            st.markdown("---")
+
         sales_df = get_sales()
         
         if sales_df.empty:
