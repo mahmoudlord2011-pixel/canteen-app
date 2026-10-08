@@ -156,13 +156,13 @@ def trigger_notification_bell():
     """
     st.components.v1.html(bell_html, height=0)
 
-# ⏰ [ميزة جديدة 1]: دالة التحقق من مواعيد وأيام العمل الرسمية
-def is_canteen_open():
+# ⏰ دالة التحقق من مواعيد وأيام عمل الكانتين للطلاب
+def is_canteen_open_for_students():
     now = datetime.now()
     
     # التحقق من الأيام (الجمعة = 4، السبت = 5)
     if now.weekday() in [4, 5]:
-        return False, "الكانتين مغلق اليوم (عطلة نهاية الأسبوع: الجمعة والسبت) 🔴"
+        return False, "الكانتين مغلق اليوم للطلاب (عطلة نهاية الأسبوع: الجمعة والسبت) 🔴"
     
     # التحقق من الوقت (من 8:00 صباحاً حتى 2:15 ظهراً)
     start_time = time(8, 0)
@@ -170,9 +170,9 @@ def is_canteen_open():
     current_time = now.time()
     
     if not (start_time <= current_time <= end_time):
-        return False, "الكانتين مغلق حالياً 🔴 (مواعيد العمل الرسمية من 8:00 صباحاً حتى 2:15 ظهراً)"
+        return False, "الكانتين مغلق للطلاب حالياً 🔴 (مواعيد الطلب الرسمية من 8:00 صباحاً حتى 2:15 ظهراً)"
         
-    return True, "الكانتين مفتوح 🟢"
+    return True, "الكانتين مفتوح للطلاب 🟢"
 
 # ---------------------------------------------------------
 # Supabase REST API Configuration
@@ -371,12 +371,13 @@ if check_system_lock() and user_role not in ["master"]:
     st.warning("الرجاء التواصل مع الإدارة لإعادة التفعيل.")
     st.stop()
 
-# ⏰ [ميزة جديدة 1]: تطبيق شرط المواعيد والأيام (استثناء حسابك oody وحساب الأدمن)
-open_status, open_msg = is_canteen_open()
-if not open_status and user_role not in ["master", "admin"]:
-    st.error(f"🔒 {open_msg}")
-    st.info("💡 يمكن للطلاب والزوار استخدام الكانتين خلال مواعيد العمل الرسمية فقط.")
-    st.stop()
+# ⏰ تطبيق القفل الزمني على الطلاب والزوار فقط (يُستثنى master, admin, canteen)
+if user_role == "student":
+    open_status, open_msg = is_canteen_open_for_students()
+    if not open_status:
+        st.error(f"🔒 {open_msg}")
+        st.info("💡 يمكنك استخدام حساب الطالب للطلب خلال مواعيد العمل الرسمية فقط (من 8:00 ص إلى 2:15 ظ، من الأحد للخميس).")
+        st.stop()
 
 # ---------------------------------------------------------
 # Main Navigation Tabs Layout
@@ -546,7 +547,7 @@ if tab_reports is not None:
     with tab_reports:
         st.subheader("📊 إحصائيات وتقارير المبيعات المحفوظة")
         
-        # 👑 [ميزة جديدة 2]: زرار إعادة ضبط وتصفير الإحصائيات (خاص بـ master و admin)
+        # 👑 زرار إعادة ضبط وتصفير الإحصائيات (خاص بـ master و admin)
         if user_role in ["master", "admin"]:
             with st.expander("⚠️ منطقة التحكم الإداري (إعادة ضبط الإحصائيات)"):
                 st.warning("تنبيه: مسح الإحصائيات سيقوم بتصفير كافة المبيعات والتقارير الحالية!")
