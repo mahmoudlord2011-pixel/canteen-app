@@ -124,6 +124,15 @@ def db_update(table, match_col, match_val, data):
     except Exception:
         return False
 
+def db_delete(table, match_col, match_val):
+    if not SUPABASE_URL or not SUPABASE_KEY:
+        return False
+    try:
+        res = requests.delete(f"{SUPABASE_URL}/rest/v1/{table}?{match_col}=eq.{match_val}", headers=HEADERS)
+        return res.status_code in [200, 204]
+    except Exception:
+        return False
+
 # 🛑 تصفير كامل وبيضاء 100% للبيانات المحلية
 if "demo_products" not in st.session_state:
     st.session_state.demo_products = pd.DataFrame(columns=["id", "name", "category", "cost_price", "selling_price", "stock"])
@@ -414,7 +423,7 @@ if tab_orders is not None:
                         st.success("تم إتمام الطلب!")
                         st.rerun()
 
-# TAB: PRODUCTS MANAGEMENT
+# TAB: PRODUCTS MANAGEMENT (خاص بالكانتين والإدارة مع إضافة الحذف)
 if tab_products is not None:
     with tab_products:
         st.subheader("⚙ إضافة منتج جديد للمنيو")
@@ -445,8 +454,32 @@ if tab_products is not None:
                     st.rerun()
 
         st.divider()
-        st.subheader("📋 قائمة المنتجات والمخزون الحالي")
-        st.dataframe(get_products(), use_container_width=True)
+        st.subheader("📋 قائمة المنتجات والتحكم بالمخزون")
+        
+        current_prods = get_products()
+        if current_prods.empty:
+            st.info("لا توجد منتجات حالية في المنيو.")
+        else:
+            for idx, p_row in current_prods.iterrows():
+                cp1, cp2, cp3, cp4 = st.columns([3, 2, 2, 1])
+                with cp1:
+                    st.markdown(f"**{p_row.get('name', '')}** ({p_row.get('category', '')})")
+                with cp2:
+                    st.markdown(f"السعر: **{p_row.get('selling_price', 0)} ج.م**")
+                with cp3:
+                    st.markdown(f"المخزون: **{p_row.get('stock', 0)} قطعة**")
+                with cp4:
+                    if st.button("حذف 🗑️", key=f"del_prod_{idx}", type="secondary", use_container_width=True):
+                        if user_role == "guest":
+                            st.session_state.demo_products = st.session_state.demo_products.drop(idx).reset_index(drop=True)
+                        else:
+                            p_id = p_row.get("id")
+                            if p_id:
+                                db_delete("products", "id", p_id)
+                            else:
+                                db_delete("products", "name", p_row.get("name"))
+                        st.success(f"تم حذف {p_row.get('name')} بنجاح!")
+                        st.rerun()
 
 # TAB: REPORTS & ANALYTICS
 if tab_reports is not None:
