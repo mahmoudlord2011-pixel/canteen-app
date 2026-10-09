@@ -282,14 +282,14 @@ if user_role == "student":
         st.info("💡 يمكن للطلاب تقديم الطلبات فقط خلال مواعيد العمل الرسمية (من 8:00 صباحاً حتى 2:15 ظهراً - من الأحد إلى الخميس).")
         st.stop()
 
-# Tabs
+# 🎯 تحديث التبويبات: إضافة المبيعات والتقارير للكانتين
 if user_role in ["master", "admin"]:
     tabs = st.tabs(["تسجيل طلب جديد 🛒", "الأوردرات 👨‍🍳", "إدارة المنتجات ⚙️", "المبيعات والتقارير 📊"])
     tab_sales, tab_orders, tab_products, tab_reports = tabs[0], tabs[1], tabs[2], tabs[3]
 elif user_role == "canteen":
-    tabs = st.tabs(["الأوردرات 👨‍🍳", "إدارة المنتجات ⚙"])
-    tab_orders, tab_products = tabs[0], tabs[1]
-    tab_sales, tab_reports = None, None
+    tabs = st.tabs(["الأوردرات 👨‍🍳", "إدارة المنتجات ⚙️", "المبيعات والتقارير 📊"])
+    tab_orders, tab_products, tab_reports = tabs[0], tabs[1], tabs[2]
+    tab_sales = None
 elif user_role == "guest":
     tabs = st.tabs(["تسجيل طلب جديد 🛒 (تجريبي)", "الأوردرات 👨‍🍳 (تجريبي)", "إدارة المنتجات ⚙️ (تجريبي)"])
     tab_sales, tab_orders, tab_products = tabs[0], tabs[1], tabs[2]
@@ -423,7 +423,7 @@ if tab_orders is not None:
                         st.success("تم إتمام الطلب!")
                         st.rerun()
 
-# TAB: PRODUCTS MANAGEMENT (خاص بالكانتين والإدارة مع إضافة الحذف)
+# TAB: PRODUCTS MANAGEMENT
 if tab_products is not None:
     with tab_products:
         st.subheader("⚙ إضافة منتج جديد للمنيو")
@@ -481,11 +481,12 @@ if tab_products is not None:
                         st.success(f"تم حذف {p_row.get('name')} بنجاح!")
                         st.rerun()
 
-# TAB: REPORTS & ANALYTICS
+# TAB: REPORTS & ANALYTICS (متاحة للإدارة والكانتين)
 if tab_reports is not None:
     with tab_reports:
         st.subheader("📊 إحصائيات وتقارير المبيعات المحفوظة")
         
+        # منطقة التصفير تظهر فقط للماستر والمدير
         if user_role in ["master", "admin"]:
             with st.expander("⚠️ منطقة التحكم الإداري (إعادة ضبط الإحصائيات)"):
                 st.warning("تنبيه: مسح الإحصائيات سيقوم بتصفير كافة المبيعات والتقارير الحالية!")
