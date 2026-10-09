@@ -124,7 +124,7 @@ def db_update(table, match_col, match_val, data):
     except Exception:
         return False
 
-# 🛑 تصفير كامل وبيضاء 100% للبيانات المحلية بدون أي منتجات قديمة
+# 🛑 تصفير كامل وبيضاء 100% للبيانات المحلية
 if "demo_products" not in st.session_state:
     st.session_state.demo_products = pd.DataFrame(columns=["id", "name", "category", "cost_price", "selling_price", "stock"])
 
@@ -243,7 +243,10 @@ if user_role == "master":
     c_status, c_switch = st.columns([2, 2])
     is_locked = check_system_lock()
     with c_status:
-        st.error("حالة النظام الحالية: النظام متوقف بالكامل 🔴") if is_locked else st.success("حالة النظام الحالية: يعمل بالكامل 🟢")
+        if is_locked:
+            st.error("حالة النظام الحالية: النظام متوقف بالكامل 🔴")
+        else:
+            st.success("حالة النظام الحالية: يعمل بالكامل 🟢")
     with c_switch:
         if is_locked:
             if st.button("🔓 إيقاف قفل النظام (تشغيل)", type="primary", use_container_width=True):
